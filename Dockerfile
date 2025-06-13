@@ -52,5 +52,5 @@ EXPOSE 8000
 # --host 0.0.0.0: Faz o servidor escutar em todas as interfaces de rede,
 #   tornando-o acessível de fora do contêiner.
 # --reload: Ativa o recarregamento automático do servidor ao detectar
-#   alterações nos arquivos, ideal para o desenvolvimento.
+#   alterações nos arquivos, ideal para o desenvolvimento .
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
