@@ -7,14 +7,13 @@ função de dependência (get_db) para ser usada nos endpoints da API.
 """
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
 # -------------------------------------------------------------------------- #
 #                               DATABASE SETUP                               #
 # -------------------------------------------------------------------------- #
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./minha_api.db"
+SQLALCHEMY_DATABASE_URL = "sqlite:///./api.db"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
@@ -29,7 +28,8 @@ Base = declarative_base()
 #                             DATABASE DEPENDENCY                            #
 # -------------------------------------------------------------------------- #
 
-def get_db():
+
+def get_db(): # pragma: no cover
     """
     Função de dependência do FastAPI para obter uma sessão de banco de dados.
 

@@ -1,30 +1,38 @@
 """
 Módulo principal da aplicação FastAPI.
 
-Define o objeto da aplicação FastAPI, a lógica de inicialização (como a criação
-de tabelas do banco de dados) e inclui todos os roteadores dos recursos.
+Este arquivo serve como o ponto de entrada principal:
+1. Cria a instância da aplicação FastAPI.
+2. Importa e registra todos os roteadores dos diferentes recursos.
+
+A criação das tabelas do banco de dados NÃO é mais gerenciada aqui. Ela
+deve ser feita por uma ferramenta de migração (como Alembic) ou em um
+script de inicialização separado, tornando a aplicação mais passiva e testável.
 """
+
 from fastapi import FastAPI
 
-from . import models
-from .database import engine
-from .routers import categories, products
+# -------------------------------------------------------------------------- #
+#                        IMPORTS PARA REGISTRO DE MÓDULOS                       #
+# -------------------------------------------------------------------------- #
+from .routers import auth, cart, categories, orders, products
 
 # -------------------------------------------------------------------------- #
-#                              APPLICATION SETUP                             #
+#                       INICIALIZAÇÃO DA APLICAÇÃO E DO DB                      #
 # -------------------------------------------------------------------------- #
 
-# Cria as tabelas no banco de dados com base nos modelos definidos
-models.Base.metadata.create_all(bind=engine)
-
-# Cria a instância principal da aplicação FastAPI
 app = FastAPI(
-    title="Minha API Escalável",
+    title="FastAPI RESTful",
     version="2.0.0",
     description="Uma API FastAPI com arquitetura em camadas e Docker.",
 )
 
-# Inclui os roteadores dos diferentes recursos da aplicação
+# -------------------------------------------------------------------------- #
+#                         INCLUSÃO DOS ROTEADORES                            #
+# -------------------------------------------------------------------------- #
+app.include_router(auth.router)
+app.include_router(cart.router)
+app.include_router(orders.router)
 app.include_router(categories.router)
 app.include_router(products.router)
 
@@ -32,12 +40,7 @@ app.include_router(products.router)
 # -------------------------------------------------------------------------- #
 #                                 ROOT ENDPOINT                              #
 # -------------------------------------------------------------------------- #
-
 @app.get("/", tags=["Root"])
 def read_root():
-    """
-    Endpoint raiz da aplicação.
-    
-    Retorna uma mensagem de boas-vindas para indicar que a API está online.
-    """
-    return {"message": "Bem-vindo à API de Categorias!"}
+    """Endpoint raiz para verificar se a API está online."""
+    return {"message": "Bem-vindo à FastAPI RESTful!"}

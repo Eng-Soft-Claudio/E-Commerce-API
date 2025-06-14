@@ -1,3 +1,9 @@
 fastapi
+httpx
+passlib[bcrypt]
+pytest
+pytest-cov
+python-jose[cryptography]
+python-multipart
 sqlalchemy
 uvicorn[standart]
