@@ -1,0 +1,54 @@
+# Nome do nosso workflow. Ele aparecerá na aba "Actions" do GitHub.
+name: Continuous Integration
+
+# -------------------------------------------------------------------------- #
+#                             GATILHOS (TRIGGERS)                            #
+# -------------------------------------------------------------------------- #
+# Define quando este workflow será executado.
+on:
+  # Executa em todo push para a branch 'main'.
+  push:
+    branches: [ "main" ]
+  # Executa toda vez que um Pull Request for aberto ou atualizado para a branch 'main'.
+  pull_request:
+    branches: [ "main" ]
+
+# -------------------------------------------------------------------------- #
+#                                     JOBS                                     #
+# -------------------------------------------------------------------------- #
+# Um workflow é composto por um ou mais "jobs" que podem rodar em sequência ou paralelo.
+jobs:
+  # O nome do nosso job.
+  build-and-test:
+    # O tipo de máquina virtual (runner) onde o job será executado.
+    # 'ubuntu-latest' é o padrão e a escolha mais comum.
+    runs-on: ubuntu-latest
+
+    # Um job é uma sequência de "steps" (passos).
+    steps:
+      # -------------------------------------------------------------------- #
+      # PASSO 1: FAZ O CHECKOUT DO CÓDIGO                                      #
+      # -------------------------------------------------------------------- #
+      # Usa uma "Action" pré-feita do GitHub para baixar o código do seu
+      # repositório para o runner.
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -------------------------------------------------------------------- #
+      # PASSO 2: CONSTRÓI A IMAGEM DOCKER                                     #
+      # -------------------------------------------------------------------- #
+      # Usa o Docker Compose para construir a imagem. Isso garante que todas
+      # as dependências do Dockerfile (incluindo as de teste) sejam instaladas.
+      # Usamos 'docker compose build' em vez de 'run' porque só precisamos da
+      # imagem pronta para o próximo passo.
+      - name: Build Docker image
+        run: docker compose build
+
+      # -------------------------------------------------------------------- #
+      # PASSO 3: EXECUTA OS TESTES DENTRO DO CONTÊINER                        #
+      # -------------------------------------------------------------------- #
+      # Executa o comando pytest dentro do serviço 'api' definido no nosso
+      # docker-compose.yml. Se os testes falharem (código de saída != 0),
+      # este passo irá falhar, e todo o workflow será marcado como falho.
+      - name: Run tests with pytest
+        run: docker compose run --rm api pytest --cov=src
