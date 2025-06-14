@@ -1,6 +1,10 @@
 # API RESTful de E-commerce com FastAPI
 
+[![Continuous Integration](https://github.com/Eng-Soft-Claudio/API/actions/workflows/ci.yml/badge.svg)](https://github.com/Eng-Soft-Claudio/API/actions/workflows/ci.yml)  
+
 Este projeto é uma API RESTful completa e robusta para uma aplicação de e-commerce, desenvolvida com FastAPI e Python. A aplicação segue as melhores práticas de arquitetura de software, incluindo uma estrutura em camadas, um ambiente de desenvolvimento containerizado com Docker e uma suíte de testes completa com 100% de cobertura de código.
+
+---
 
 ## ✨ Funcionalidades Principais
 
@@ -16,6 +20,8 @@ Este projeto é uma API RESTful completa e robusta para uma aplicação de e-com
 -   **Banco de Dados**: Integração com banco de dados relacional via **SQLAlchemy ORM**. Projetado para ser compatível com SQLite (para desenvolvimento) e PostgreSQL (para produção).
 -   **Testes Automatizados**: **100% de cobertura de testes** da lógica da aplicação usando `pytest`, garantindo a robustez e a confiabilidade do código.
 
+---
+
 ## 🚀 Arquitetura
 
 A aplicação segue uma arquitetura em camadas para garantir a separação de responsabilidades e a escalabilidade:
@@ -28,6 +34,8 @@ A aplicação segue uma arquitetura em camadas para garantir a separação de re
 -   **`database.py`**: Gerencia a conexão com o banco de dados.
 -   **`auth.py`**: Centraliza toda a lógica de segurança, autenticação e autorização.
 
+---
+
 ## 🛠️ Tecnologias Utilizadas
 
 -   **Backend**: Python 3.13, FastAPI
@@ -36,6 +44,8 @@ A aplicação segue uma arquitetura em camadas para garantir a separação de re
 -   **Containerização**: Docker, Docker Compose
 -   **Testes**: Pytest, Pytest-Cov
 -   **Servidor ASGI**: Uvicorn
+
+---
 
 ## ⚙️ Como Executar o Projeto
 
@@ -70,6 +80,8 @@ Este projeto foi projetado para ser executado dentro de um contêiner Docker, fa
     A documentação interativa da API (Swagger UI) pode ser acessada em:
     -   **`http://localhost:8000/docs`**
 
+---
+
 ## 🧪 Como Executar os Testes
 
 Com o projeto aberto no Dev Container do VSCode:
@@ -81,6 +93,14 @@ Com o projeto aberto no Dev Container do VSCode:
     pytest --cov=src --cov-report=term-missing
     ```
 
+---
+
 ## 👨‍💻 Autor
 
 -   **Cláudio** - [Eng-Soft-Claudio](https://github.com/Eng-Soft-Claudio)
+
+---
+
+## ⚖️ Licença
+
+Este projeto está licenciado sob os termos da Licença MIT. Consulte o arquivo `LICENSE` para mais detalhes.
