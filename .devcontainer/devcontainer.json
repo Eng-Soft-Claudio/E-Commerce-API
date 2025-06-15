@@ -12,6 +12,5 @@
             ]
         }
     },
-    "postCreateCommand": "echo 'Ambiente pronto!'",
     "forwardPorts": [8000]
 }

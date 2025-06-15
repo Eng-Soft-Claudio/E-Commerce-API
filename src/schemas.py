@@ -201,5 +201,6 @@ class Order(BaseModel):
     created_at: datetime
     total_price: float
     items: List[OrderItem]
+    status: str
 
     model_config = ConfigDict(from_attributes=True)

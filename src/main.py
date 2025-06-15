@@ -12,14 +12,17 @@ script de inicialização separado, tornando a aplicação mais passiva e testá
 
 from fastapi import FastAPI
 
-# -------------------------------------------------------------------------- #
-#                        IMPORTS PARA REGISTRO DE MÓDULOS                       #
-# -------------------------------------------------------------------------- #
-from .routers import auth, cart, categories, orders, products
 
 # -------------------------------------------------------------------------- #
-#                       INICIALIZAÇÃO DA APLICAÇÃO E DO DB                      #
+#                        IMPORTS PARA REGISTRO DE MÓDULOS                    #
 # -------------------------------------------------------------------------- #
+from .routers import auth, cart, categories, orders, products, payments
+
+
+# -------------------------------------------------------------------------- #
+#                       INICIALIZAÇÃO DA APLICAÇÃO E DO DB                   #
+# -------------------------------------------------------------------------- #
+
 
 app = FastAPI(
     title="FastAPI RESTful",
@@ -35,6 +38,7 @@ app.include_router(cart.router)
 app.include_router(orders.router)
 app.include_router(categories.router)
 app.include_router(products.router)
+app.include_router(payments.router)
 
 
 # -------------------------------------------------------------------------- #

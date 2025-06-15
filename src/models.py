@@ -96,6 +96,10 @@ class Order(Base):
     total_price: Mapped[float] = mapped_column(Float)
     customer: Mapped["User"] = relationship(back_populates="orders")
     items: Mapped[List["OrderItem"]] = relationship(cascade="all, delete-orphan")
+    status: Mapped[str] = mapped_column(String, default="pending_payment")
+    payment_intent_id: Mapped[Optional[str]] = mapped_column(
+        String, unique=True, index=True
+    )
 
 
 class OrderItem(Base):

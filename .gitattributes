@@ -1,0 +1,2 @@
+# Garante que os scripts shell sempre usem finais de linha no estilo Linux (LF)
+*.sh text eol=lf

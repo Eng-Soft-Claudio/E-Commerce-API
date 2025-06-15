@@ -1,9 +1,11 @@
 fastapi
 httpx
 passlib[bcrypt]
+pydantic-settings
 pytest
 pytest-cov
 python-jose[cryptography]
 python-multipart
 sqlalchemy
+stripe
 uvicorn[standart]
