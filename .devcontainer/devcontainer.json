@@ -1,5 +1,5 @@
 {
-    "name": "FastAPI_Project (Dev Container)",
+    "name": "APP",
     "dockerComposeFile": "../docker-compose.yml",
     "service": "api",
     "workspaceFolder": "/app",
