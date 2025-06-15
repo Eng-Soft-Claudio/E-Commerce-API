@@ -51,8 +51,9 @@ jobs:
       # docker-compose.yml. Se os testes falharem (código de saída != 0),
       # este passo irá falhar, e todo o workflow será marcado como falho.
       - name: Run tests with pytest
-        run: >
-          docker compose run --rm api pytest --cov=src
-          -e STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
-          -e STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
-          api pytest --cov=src
+        run: |
+          docker compose run --rm \
+            -e STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }} \
+            -e STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }} \
+            api \
+            pytest --cov=src
