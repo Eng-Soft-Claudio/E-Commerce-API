@@ -16,7 +16,7 @@ services:
 
     # Define um nome fixo para o contêiner, facilitando a sua identificação
     # e gerenciamento via linha de comando (ex: docker logs ...).
-    container_name: minha_fastapi_app
+    container_name: app
 
     # Mapeia a porta 8000 da máquina host para a porta 8000 do contêiner.
     # Isso torna a API acessível através de http://localhost:8000 no navegador.
@@ -30,3 +30,6 @@ services:
     # qualquer alteração no código local é refletida instantaneamente no contêiner.
     volumes:
       - .:/app
+    
+
+    

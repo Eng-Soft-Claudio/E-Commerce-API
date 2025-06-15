@@ -4,7 +4,6 @@
 # Este Dockerfile define os passos para criar uma imagem Docker para a
 # aplicação FastAPI. Ele configura um ambiente Python, instala as
 # dependências, copia o código fonte e define o comando de inicialização.
-#
 
 # -------------------------------------------------------------------------- #
 #                                IMAGEM BASE                                 #
