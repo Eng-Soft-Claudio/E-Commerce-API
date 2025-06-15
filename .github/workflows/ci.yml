@@ -24,6 +24,11 @@ jobs:
     # 'ubuntu-latest' é o padrão e a escolha mais comum.
     runs-on: ubuntu-latest
 
+     # Variáveis de ambiente para este job
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+
     # Um job é uma sequência de "steps" (passos).
     steps:
       # -------------------------------------------------------------------- #
