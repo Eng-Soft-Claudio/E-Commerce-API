@@ -4,7 +4,6 @@
 # Este Dockerfile define os passos para criar uma imagem Docker para a
 # aplicação FastAPI. Ele configura um ambiente Python, instala as
 # dependências, copia o código fonte e define o comando de inicialização.
-#
 
 # -------------------------------------------------------------------------- #
 #                                IMAGEM BASE                                 #
@@ -53,4 +52,4 @@ EXPOSE 8000
 #   tornando-o acessível de fora do contêiner.
 # --reload: Ativa o recarregamento automático do servidor ao detectar
 #   alterações nos arquivos, ideal para o desenvolvimento .
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD [ "uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload" ]
