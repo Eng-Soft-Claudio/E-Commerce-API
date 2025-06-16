@@ -4,6 +4,7 @@ passlib[bcrypt]
 pydantic-settings
 pytest
 pytest-cov
+pytest-mock
 python-jose[cryptography]
 python-multipart
 sqlalchemy

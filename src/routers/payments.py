@@ -127,34 +127,32 @@ async def stripe_webhook(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signature"
         )
 
-    if event.type == "checkout.session.completed":
-        session = event.data.object
+    event_type = event.get("type")
+    
+    if event_type == "checkout.session.completed":
+        # 'data' e 'object' também são chaves do dicionário.
+        session = event.get("data", {}).get("object", {})
         metadata = session.get("metadata", {})
         order_id_str = metadata.get("order_id")
-
+        
         if not order_id_str:
-            logging.error("Webhook 'checkout.session.completed' recebido sem order_id nos metadados.")
+            logging.error("Webhook 'checkout.session.completed' recebido sem order_id.")
             return {"status": "error", "detail": "Missing order_id in metadata"}
 
         payment_intent_id = session.get("payment_intent")
         payment_status = session.get("payment_status")
-
+        
         try:
             order = crud.get_order_by_id(db, int(order_id_str))
-            if order:
-                if payment_status == "paid" and order.status != "paid":
-                    order.status = "paid"
+            if order and order.status != "paid" and payment_status == "paid":
+                order.status = "paid"
                 if isinstance(payment_intent_id, str):
-                    order.payment_intent_id = payment_intent_id
-
+                     order.payment_intent_id = payment_intent_id
                 db.commit()
         except Exception as e:
             logging.error(f"ERRO no webhook ao processar pedido {order_id_str}: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="DB update failed.",
-            )
+            raise HTTPException(status_code=500, detail="DB update failed.")
     else:
-        logging.warning(f"Webhook não tratado recebido: '{event.type}'. Event ID: {event.id}")
+        logging.warning(f"Webhook não tratado recebido: '{event_type}'. Event ID: {event.get('id')}")
 
     return {"status": "success"}

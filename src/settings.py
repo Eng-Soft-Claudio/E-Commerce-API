@@ -28,6 +28,6 @@ class Settings(BaseSettings):
 try:
     settings = Settings.model_validate({})
     print("--- [SETTINGS] Configurações carregadas com sucesso! ---")
-except Exception as e:
+except Exception as e: # pragma: no cover
     print(f"--- [SETTINGS] ERRO AO CARREGAR CONFIGURAÇÕES: {e} ---")
     raise e

@@ -17,7 +17,7 @@ from src import models  # noqa: F401
 from src import crud
 from src.schemas import UserCreate
 from src.auth import create_access_token
-from src.routers import auth, cart, categories, orders, products
+from src.routers import auth, cart, categories, orders, products, payments
 
 # -------------------------------------------------------------------------- #
 #                       SETUP DO BANCO DE DADOS DE TESTE                     #
@@ -67,6 +67,7 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     test_app.include_router(orders.router)
     test_app.include_router(categories.router)
     test_app.include_router(products.router)
+    test_app.include_router(payments.router)
 
     with TestClient(test_app) as test_client:
         yield test_client
