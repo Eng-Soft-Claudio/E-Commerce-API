@@ -27,7 +27,14 @@ WORKDIR /app
 # Copia o arquivo de dependências separadamente para aproveitar o cache de
 # camadas do Docker. Esta etapa só será re-executada se o conteúdo do
 # requirements.txt for alterado.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        sqlite3 \
+        git \
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
+RUN pip install setuptools
 RUN pip install --no-cache-dir -r requirements.txt
 
 # -------------------------------------------------------------------------- #

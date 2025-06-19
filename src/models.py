@@ -39,6 +39,7 @@ class Product(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String, index=True)
+    image_url: Mapped[Optional[str]]
     price: Mapped[float] = mapped_column(Float, nullable=False)
     description: Mapped[str | None] = mapped_column(String)
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))

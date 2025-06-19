@@ -15,6 +15,7 @@ class ProductBase(BaseModel):
     """Schema base para um produto, usado em listas."""
 
     name: str
+    image_url: Optional[str] = None
     price: float
     description: Optional[str] = None
 
