@@ -11,28 +11,50 @@ script de inicialização separado, tornando a aplicação mais passiva e testá
 """
 
 from fastapi import FastAPI
-
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 
 # -------------------------------------------------------------------------- #
 #                        IMPORTS PARA REGISTRO DE MÓDULOS                    #
 # -------------------------------------------------------------------------- #
-from .routers import auth, cart, categories, orders, products, payments
+from .database import engine, Base
+from .routers import auth, cart, categories, orders, products, payments, dashboard
 
 
 # -------------------------------------------------------------------------- #
-#                       INICIALIZAÇÃO DA APLICAÇÃO E DO DB                   #
+#                        LIFESPAN E INICIALIZAÇÃO DO DB                      #
 # -------------------------------------------------------------------------- #
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    Base.metadata.create_all(bind=engine)
+    yield
 
 
+# -------------------------------------------------------------------------- #
+#                   CRIAÇÃO E CONFIGURAÇÃO DA APLICAÇÃO E CORS               #
+# -------------------------------------------------------------------------- #
 app = FastAPI(
     title="FastAPI RESTful",
     version="2.0.0",
     description="Uma API FastAPI com arquitetura em camadas e Docker.",
+    lifespan=lifespan,
+)
+origins = [
+    "http://localhost:3000",
+    "http://localhost",
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # -------------------------------------------------------------------------- #
 #                         INCLUSÃO DOS ROTEADORES                            #
 # -------------------------------------------------------------------------- #
+app.include_router(dashboard.router)
 app.include_router(auth.router)
 app.include_router(cart.router)
 app.include_router(orders.router)

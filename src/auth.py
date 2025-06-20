@@ -22,21 +22,17 @@ from .database import get_db
 #                         CONFIGURAÇÕES DE SEGURANÇA                         #
 # -------------------------------------------------------------------------- #
 
-# IMPORTANTE: Em um ambiente de produção real, estes valores devem ser
-# carregados a partir de variáveis de ambiente ou um sistema de segredos.
 SECRET_KEY = secrets.token_urlsafe(32)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# Contexto do Passlib para hashing de senhas usando o algoritmo bcrypt.
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Esquema OAuth2. O 'tokenUrl' aponta para o endpoint de login que fornecerá o token.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 
 # -------------------------------------------------------------------------- #
-#                      FUNÇÕES UTILITÁRIAS DE SENHA E TOKEN                    #
+#                      FUNÇÕES UTILITÁRIAS DE SENHA E TOKEN                  #
 # -------------------------------------------------------------------------- #
 
 
