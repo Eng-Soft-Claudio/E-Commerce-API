@@ -7,29 +7,12 @@
 #
 
 services:
-  # Define o serviço principal da aplicação para a nossa API FastAPI.
   api:
-    # Instrução para construir a imagem Docker.
-    # 'context: .' especifica que o contexto de build é o diretório atual.
-    # O Docker usará o 'Dockerfile' na raiz do projeto para a construção.
     build: .
-
-    # Define um nome fixo para o contêiner, facilitando a sua identificação
-    # e gerenciamento via linha de comando (ex: docker logs ...).
     container_name: app
-
-    # Mapeia a porta 8000 da máquina host para a porta 8000 do contêiner.
-    # Isso torna a API acessível através de http://localhost:8000 no navegador.
     ports:
       - "8000:8000"
-
-    # Monta um volume para sincronizar o código entre a máquina host e o contêiner.
-    # '.:/app' mapeia o diretório raiz do projeto ('.') no host para o diretório
-    # '/app' dentro do contêiner.
-    # Esta é a configuração essencial que permite o "hot-reloading", pois
-    # qualquer alteração no código local é refletida instantaneamente no contêiner.
     volumes:
       - .:/app
-    
-
-    
+    env_file:
+      - .env

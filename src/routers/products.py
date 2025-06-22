@@ -2,6 +2,7 @@
 Módulo de Roteamento para o recurso 'Produto'.
 """
 
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -73,10 +74,16 @@ def delete_product_endpoint(product_id: int, db: Session = Depends(get_db)):
 # --- Operações de Leitura (PÚBLICAS) ---
 @router.get("/", response_model=list[schemas.Product])
 def read_products_endpoint(
-    skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
+    skip: int = 0, 
+    limit: int = 100, 
+    category_id: Optional[int] = None, 
+    db: Session = Depends(get_db)
 ):
-    """Lista todos os produtos. Acesso público."""
-    products = crud.get_products(db, skip=skip, limit=limit)
+    """
+    Lista todos os produtos. Acesso público.
+    Pode ser filtrado por `category_id`.
+    """
+    products = crud.get_products(db, skip=skip, limit=limit, category_id=category_id)
     return products
 
 

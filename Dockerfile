@@ -59,4 +59,4 @@ EXPOSE 8000
 #   tornando-o acessível de fora do contêiner.
 # --reload: Ativa o recarregamento automático do servidor ao detectar
 #   alterações nos arquivos, ideal para o desenvolvimento .
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--proxy-headers", "--forwarded-allow-ips", "*"]

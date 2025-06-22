@@ -7,7 +7,7 @@ a sessão do banco de dados para manipular os dados.
 """
 
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from . import models, schemas, auth
 
 # -------------------------------------------------------------------------- #
@@ -88,6 +88,19 @@ def create_user(db: Session, user: schemas.UserCreate, is_superuser: bool = Fals
     return db_user
 
 
+def get_all_users(db: Session, skip: int = 0, limit: int = 100):
+    """
+    [Admin] Busca todos os usuários que não são superusuários (clientes).
+    """
+    return (
+        db.query(models.User)
+        .filter(models.User.is_superuser.is_(False))
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
 # -------------------------------------------------------------------------- #
 #                         CRUD FUNCTIONS - PRODUCTS                          #
 # -------------------------------------------------------------------------- #
@@ -96,9 +109,20 @@ def get_product(db: Session, product_id: int):
     return db.query(models.Product).filter(models.Product.id == product_id).first()
 
 
-def get_products(db: Session, skip: int = 0, limit: int = 100):
-    """Busca uma lista de produtos com paginação."""
-    return db.query(models.Product).offset(skip).limit(limit).all()
+def get_products(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+    category_id: Optional[int] = None,
+):
+    """
+    Busca uma lista de produtos com paginação.
+    Se category_id for fornecido, filtra os produtos por essa categoria.
+    """
+    query = db.query(models.Product)
+    if category_id is not None:
+        query = query.filter(models.Product.category_id == category_id)
+    return query.offset(skip).limit(limit).all()
 
 
 def create_product(db: Session, product: schemas.ProductCreate):
@@ -136,7 +160,12 @@ def delete_product(db: Session, product_id: int):
 # -------------------------------------------------------------------------- #
 def get_cart_by_user_id(db: Session, user_id: int):
     """Busca o carrinho de um usuário pelo ID do usuário."""
-    return db.query(models.Cart).filter(models.Cart.user_id == user_id).first()
+    return (
+        db.query(models.Cart)
+        .options(joinedload(models.Cart.items).joinedload(models.CartItem.product))
+        .filter(models.Cart.user_id == user_id)
+        .first()
+    )
 
 
 def add_item_to_cart(db: Session, cart_id: int, item: schemas.CartItemCreate):
@@ -155,6 +184,28 @@ def add_item_to_cart(db: Session, cart_id: int, item: schemas.CartItemCreate):
 
     db.commit()
     db.refresh(db_cart_item)
+    return db_cart_item
+
+
+def update_cart_item_quantity(
+    db: Session, cart_id: int, product_id: int, quantity: int
+):
+    """Atualiza a quantidade de um item específico no carrinho."""
+    db_cart_item = (
+        db.query(models.CartItem)
+        .filter_by(cart_id=cart_id, product_id=product_id)
+        .first()
+    )
+
+    if db_cart_item:
+        if quantity > 0:
+            db_cart_item.quantity = quantity
+            db.commit()
+            db.refresh(db_cart_item)
+        else:
+            db.delete(db_cart_item)
+            db.commit()
+            return None
     return db_cart_item
 
 
@@ -177,30 +228,42 @@ def remove_cart_item(db: Session, cart_id: int, product_id: int):
 
 
 def create_order_from_cart(db: Session, user: models.User) -> Optional[models.Order]:
-    """Cria um pedido a partir do carrinho de um usuário e limpa o carrinho."""
-    cart = user.cart
+    """Cria um pedido a partir do carrinho de um usuário, ignorando itens cujo produto foi deletado."""
+    cart = get_cart_by_user_id(db, user.id)
     if not cart or not cart.items:
         return None
 
     total_price = 0
-    order_items_data = []
-    for cart_item in cart.items:
-        price = cart_item.product.price * cart_item.quantity
-        total_price += price
-        order_items_data.append(
-            models.OrderItem(
-                product_id=cart_item.product_id,
-                quantity=cart_item.quantity,
-                price_at_purchase=cart_item.product.price,
+    valid_order_items = []
+
+    processed_cart_item_ids = []
+
+    for item in list(cart.items):
+        if item.product:
+            total_price += item.product.price * item.quantity
+            valid_order_items.append(
+                models.OrderItem(
+                    product_id=item.product.id,
+                    quantity=item.quantity,
+                    price_at_purchase=item.product.price,
+                )
             )
-        )
+            processed_cart_item_ids.append(item.id)
+
+    if not valid_order_items:
+        db.query(models.CartItem).filter(models.CartItem.cart_id == cart.id).delete()
+        db.commit()
+        return None
 
     new_order = models.Order(
-        user_id=user.id, total_price=total_price, items=order_items_data
+        user_id=user.id, total_price=total_price, items=valid_order_items
     )
     db.add(new_order)
 
-    db.query(models.CartItem).filter_by(cart_id=cart.id).delete()
+    if processed_cart_item_ids:
+        db.query(models.CartItem).filter(
+            models.CartItem.id.in_(processed_cart_item_ids)
+        ).delete(synchronize_session=False)
 
     db.commit()
     db.refresh(new_order)
@@ -215,3 +278,21 @@ def get_orders_by_user(db: Session, user_id: int):
 def get_order_by_id(db: Session, order_id: int):
     """Busca um pedido específico pelo seu ID."""
     return db.query(models.Order).filter(models.Order.id == order_id).first()
+
+
+def get_all_orders(db: Session, skip: int = 0, limit: int = 100):
+    """
+    Busca todos os pedidos, pré-carregando os relacionamentos com 'selectinload'.
+    Esta abordagem é mais robusta para coleções (one-to-many).
+    """
+    return (
+        db.query(models.Order)
+        .options(
+            joinedload(models.Order.customer),
+            selectinload(models.Order.items).joinedload(models.OrderItem.product),
+        )
+        .order_by(models.Order.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )

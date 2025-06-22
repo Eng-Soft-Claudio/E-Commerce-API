@@ -205,3 +205,18 @@ class Order(BaseModel):
     status: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class UserInOrder(BaseModel):
+    """Schema para os dados do cliente dentro de um pedido de admin."""
+
+    id: int
+    email: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminOrder(Order):
+    """Schema para um pedido na visão do admin, incluindo dados do cliente."""
+
+    customer: UserInOrder
+    model_config = ConfigDict(from_attributes=True)

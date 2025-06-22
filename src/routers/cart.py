@@ -134,3 +134,36 @@ def remove_product_from_cart(
         )
 
     return {"message": "Item removed from cart successfully."}
+
+
+@router.put("/items/{product_id}", response_model=schemas.CartItem)
+def update_cart_item(
+    product_id: int,
+    item_update: schemas.CartItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """
+    Atualiza a quantidade de um item no carrinho do usuário.
+    """
+    cart = current_user.cart
+
+    db_product = crud.get_product(db, product_id=product_id)
+    if not db_product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found."
+        )
+
+    updated_item = crud.update_cart_item_quantity(
+        db, cart_id=cart.id, product_id=product_id, quantity=item_update.quantity
+    )
+
+    if updated_item is None and item_update.quantity <= 0:
+        raise HTTPException(status_code=status.HTTP_204_NO_CONTENT)
+
+    if not updated_item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Item not in cart."
+        )
+
+    return updated_item

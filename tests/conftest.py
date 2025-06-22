@@ -17,7 +17,8 @@ from src import models  # noqa: F401
 from src import crud
 from src.schemas import UserCreate
 from src.auth import create_access_token
-from src.routers import auth, cart, categories, orders, products, payments
+
+from src.routers import auth, cart, categories, orders, products, payments, users
 
 # -------------------------------------------------------------------------- #
 #                       SETUP DO BANCO DE DADOS DE TESTE                     #
@@ -38,9 +39,7 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 
 @pytest.fixture(scope="function")
 def db_session() -> Generator[Session, None, None]:
-    """
-    Fixture que gerencia o ciclo de vida completo do banco de dados para um único teste.
-    """
+    """Cria e destrói um banco de dados em memória para cada teste."""
     Base.metadata.create_all(bind=engine)
     db = TestingSessionLocal()
     try:
@@ -52,9 +51,7 @@ def db_session() -> Generator[Session, None, None]:
 
 @pytest.fixture(scope="function")
 def client(db_session: Session) -> Generator[TestClient, None, None]:
-    """
-    Fixture principal que monta uma aplicação FastAPI de teste completa.
-    """
+    """Fixture principal que monta uma aplicação FastAPI de teste completa."""
     test_app = FastAPI()
 
     def override_get_db():
@@ -68,6 +65,9 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     test_app.include_router(categories.router)
     test_app.include_router(products.router)
     test_app.include_router(payments.router)
+    test_app.include_router(
+        users.router
+    )  
 
     with TestClient(test_app) as test_client:
         yield test_client
@@ -80,10 +80,7 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 
 @pytest.fixture(scope="function")
 def test_superuser(db_session: Session) -> Dict:
-    """
-    Fixture que cria um superuser de teste DIRETAMENTE no banco para garantir
-    consistência, contornando a lógica de 'primeiro usuário' da API.
-    """
+    """Cria um superuser de teste diretamente no banco."""
     user_schema = UserCreate(email="admin@test.com", password="password123")
     user_model = crud.create_user(db=db_session, user=user_schema, is_superuser=True)
     return {

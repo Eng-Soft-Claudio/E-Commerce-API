@@ -19,7 +19,6 @@ from .. import crud
 from ..database import get_db
 from ..settings import settings
 
-
 # -------------------------------------------------------------------------- #
 #                             CONFIGURAÇÃO INICIAL                           #
 # -------------------------------------------------------------------------- #
@@ -28,25 +27,19 @@ router = APIRouter(prefix="/payments", tags=["Payments"])
 
 
 # -------------------------------------------------------------------------- #
-#                         ENDPOINT DE CRIAÇÃO DE PAGAMENTO                   #
+#                 ENDPOINT DE CRIAÇÃO DE SESSÃO DE CHECKOUT                  #
 # -------------------------------------------------------------------------- #
 @router.post("/create-checkout-session/{order_id}", status_code=status.HTTP_200_OK)
 async def create_checkout_session(order_id: int, db: Session = Depends(get_db)):
     """
     Cria uma Sessão de Checkout no Stripe para um pedido existente.
-
-    Esta função gera uma URL de pagamento segura hospedada pelo Stripe.
     """
     order = crud.get_order_by_id(db, order_id)
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
-        )
+        raise HTTPException(status_code=404, detail="Order not found")
+
     if order.status == "paid":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Order has already been paid.",
-        )
+        raise HTTPException(status_code=400, detail="Order has already been paid.")
 
     line_items = []
     for item in order.items:
@@ -74,28 +67,25 @@ async def create_checkout_session(order_id: int, db: Session = Depends(get_db)):
             metadata={"order_id": str(order.id)},
         )
 
+        if not checkout_session.url:
+            raise HTTPException(
+                status_code=500, detail="Stripe did not return a checkout URL."
+            )
+
         payment_intent_id = checkout_session.payment_intent
         if isinstance(payment_intent_id, str):
             order.payment_intent_id = payment_intent_id
             db.commit()
 
-        checkout_url = checkout_session.url
-        if not checkout_url:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Stripe did not return a checkout URL.",
-            )
-
-        return {"checkout_url": checkout_url}
+        return {"checkout_url": checkout_session.url}
 
     except StripeError as e:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Stripe error: {e.user_message or str(e)}",
+            status_code=400, detail=f"Stripe error: {e.user_message or str(e)}"
         )
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=500, detail=f"An unexpected error occurred: {str(e)}"
         )
 
 
@@ -109,7 +99,7 @@ async def stripe_webhook(
     db: Session = Depends(get_db),
 ):
     """
-    Endpoint público para receber e processar eventos (webhooks) do Stripe.
+    Processa eventos (webhooks) do Stripe de forma segura.
     """
     payload = await request.body()
     try:
@@ -119,40 +109,37 @@ async def stripe_webhook(
             secret=settings.STRIPE_WEBHOOK_SECRET,
         )
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid payload"
-        )
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
     except SignatureVerificationError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signature"
-        )
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
-    event_type = event.get("type")
-    
-    if event_type == "checkout.session.completed":
-        # 'data' e 'object' também são chaves do dicionário.
-        session = event.get("data", {}).get("object", {})
-        metadata = session.get("metadata", {})
-        order_id_str = metadata.get("order_id")
-        
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        order_id_str = session.get("metadata", {}).get("order_id")
+
         if not order_id_str:
             logging.error("Webhook 'checkout.session.completed' recebido sem order_id.")
-            return {"status": "error", "detail": "Missing order_id in metadata"}
-
-        payment_intent_id = session.get("payment_intent")
-        payment_status = session.get("payment_status")
-        
+            return {"status": "success", "detail": "Webhook ignored, no order_id."}
         try:
             order = crud.get_order_by_id(db, int(order_id_str))
-            if order and order.status != "paid" and payment_status == "paid":
+            if (
+                order
+                and order.status != "paid"
+                and session.get("payment_status") == "paid"
+            ):
                 order.status = "paid"
-                if isinstance(payment_intent_id, str):
-                     order.payment_intent_id = payment_intent_id
+                order.payment_intent_id = session.get("payment_intent")
                 db.commit()
+                logging.info(
+                    f"Pedido #{order_id_str} atualizado para 'paid' via webhook."
+                )
         except Exception as e:
-            logging.error(f"ERRO no webhook ao processar pedido {order_id_str}: {e}")
-            raise HTTPException(status_code=500, detail="DB update failed.")
-    else:
-        logging.warning(f"Webhook não tratado recebido: '{event_type}'. Event ID: {event.get('id')}")
+            logging.error(
+                f"Erro de DB ao processar webhook para order_id {order_id_str}: {e}"
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Database processing failed. Webhook will be retried.",
+            )
 
     return {"status": "success"}

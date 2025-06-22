@@ -1,6 +1,8 @@
+bcrypt
 fastapi
 httpx
 passlib[bcrypt]
+pydantic
 pydantic-settings
 pytest
 pytest-cov
