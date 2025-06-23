@@ -45,9 +45,9 @@ async def lifespan(app: FastAPI):
 #                  CRIAÇÃO E CONFIGURAÇÃO DA APLICAÇÃO E CORS                #
 # -------------------------------------------------------------------------- #
 app = FastAPI(
-    title="API - Cold Metal",
+    title="Louva-Deus",
     version="1.0.0",
-    description="Backend para o e-commerce Cold Metal.",
+    description="Sua loja de produtos religiosos.",
     lifespan=lifespan,
 )
 
@@ -78,4 +78,4 @@ app.include_router(users.router)
 @app.get("/", tags=["Root"])
 def read_root():
     """Endpoint raiz para verificar se a API está online."""
-    return {"message": "API do E-commerce Cold Metal está online."}
+    return {"message": "API do E-commerce Louva-Deus está online."}

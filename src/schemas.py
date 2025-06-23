@@ -1,18 +1,33 @@
 """
 Define os schemas Pydantic para validação de dados da API.
+
+Este módulo estabelece os "contratos" de dados para a aplicação, utilizando
+uma biblioteca externa robusta para validação de documentos brasileiros,
+como o CPF, para garantir maior confiabilidade e manutenibilidade.
 """
 
-from pydantic import BaseModel, computed_field, ConfigDict
-from typing import List, Optional
+# -------------------------------------------------------------------------- #
+#                             IMPORTS NECESSÁRIOS                            #
+# -------------------------------------------------------------------------- #
 from datetime import datetime
+from typing import List, Optional
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    model_validator,
+)
+from validate_docbr import CPF
 
 # -------------------------------------------------------------------------- #
-#                         Schemas Base Reutilizáveis                         #
+#                        SCHEMAS DE PRODUTO E CATEGORIA                      #
 # -------------------------------------------------------------------------- #
 
 
 class ProductBase(BaseModel):
-    """Schema base para um produto, usado em listas."""
+    """Schema base com os campos essenciais de um produto."""
 
     name: str
     image_url: Optional[str] = None
@@ -21,15 +36,26 @@ class ProductBase(BaseModel):
 
 
 class CategoryBase(BaseModel):
-    """Schema base para uma categoria, contendo atributos comuns."""
+    """Schema base com os campos essenciais de uma categoria."""
 
+    id: int
     title: str
     description: Optional[str] = None
 
+    model_config = ConfigDict(from_attributes=True)
 
-# -------------------------------------------------------------------------- #
-#                         Schemas de Produto                                 #
-# -------------------------------------------------------------------------- #
+
+class Category(CategoryBase):
+    """Schema de leitura para uma categoria, incluindo a lista de seus produtos."""
+
+    products: List[ProductBase] = []
+
+
+class CategoryCreate(BaseModel):
+    """Schema para a criação de uma nova categoria."""
+
+    title: str
+    description: Optional[str] = None
 
 
 class ProductCreate(ProductBase):
@@ -44,98 +70,19 @@ class ProductUpdate(ProductBase):
     pass
 
 
-class CategoryInProduct(CategoryBase):
-    """Schema para determinar a categoria de um produto."""
-
-    id: int
-    model_config = ConfigDict(from_attributes=True)
-
-
 class Product(ProductBase):
-    """Schema para a leitura de um produto, incluindo seu ID e categoria."""
+    """Schema de leitura para um produto, incluindo os dados de sua categoria."""
 
     id: int
-    category: CategoryInProduct
+    category: CategoryBase
     model_config = ConfigDict(from_attributes=True)
 
 
-# -------------------------------------------------------------------------- #
-#                        Schemas de Categoria                                #
-# -------------------------------------------------------------------------- #
-
-
-class CategoryCreate(CategoryBase):
-    """Schema para a criação de uma nova categoria."""
-
-    pass
-
-
-class Category(CategoryBase):
-    """Schema para a leitura de uma categoria, incluindo seus produtos."""
-
-    id: int
-    products: List[ProductBase] = []
-    model_config = ConfigDict(from_attributes=True)
-
+Category.model_rebuild()
 
 # -------------------------------------------------------------------------- #
-#                             SCHEMAS DE USUÁRIO                             #
+#                         SCHEMAS DE CARRINHO DE COMPRAS                     #
 # -------------------------------------------------------------------------- #
-
-
-class UserBase(BaseModel):
-    """Schema base para um usuário."""
-
-    email: str
-
-
-class UserCreate(UserBase):
-    """Schema para a criação de um usuário, exige uma senha."""
-
-    password: str
-
-
-class User(UserBase):
-    """Schema para a leitura de um usuário, nunca inclui a senha."""
-
-    id: int
-    is_superuser: bool
-    model_config = ConfigDict(from_attributes=True)
-
-
-# -------------------------------------------------------------------------- #
-#                               SCHEMAS DE TOKEN                             #
-# -------------------------------------------------------------------------- #
-
-
-class Token(BaseModel):
-    """Schema para o token de acesso."""
-
-    access_token: str
-    token_type: str
-
-
-class TokenData(BaseModel):
-    """
-    Schema para os dados validados contidos dentro do token JWT.
-
-    Como instanciamos esta classe somente após validar o payload, o campo
-    'email' pode ser definido como obrigatório.
-    """
-
-    email: str
-
-
-# -------------------------------------------------------------------------- #
-#                           CART SCHEMAS                                     #
-# -------------------------------------------------------------------------- #
-
-
-class ProductInCart(ProductBase):
-    """Schema para o produto dentro de um item de carrinho."""
-
-    id: int
-    model_config = ConfigDict(from_attributes=True)
 
 
 class CartItemBase(BaseModel):
@@ -158,15 +105,15 @@ class CartItemUpdate(BaseModel):
 
 
 class CartItem(CartItemBase):
-    """Schema para exibir um item completo no carrinho."""
+    """Schema de leitura para um item de carrinho."""
 
     id: int
-    product: ProductInCart
+    product: Product
     model_config = ConfigDict(from_attributes=True)
 
 
 class Cart(BaseModel):
-    """Schema principal para exibir o carrinho de um usuário."""
+    """Schema principal de leitura para o carrinho de um usuário."""
 
     id: int
     items: List[CartItem] = []
@@ -175,48 +122,120 @@ class Cart(BaseModel):
     @property
     def total_price(self) -> float:
         """Calcula o preço total do carrinho."""
-        return sum(item.product.price * item.quantity for item in self.items)
+        return sum(
+            item.product.price * item.quantity for item in self.items if item.product
+        )
 
     model_config = ConfigDict(from_attributes=True)
 
 
 # -------------------------------------------------------------------------- #
-#                              ORDER SCHEMAS                                 #
+#                      SCHEMAS DE PEDIDO E ITENS DE PEDIDO                   #
 # -------------------------------------------------------------------------- #
 
 
 class OrderItem(BaseModel):
-    """Schema para exibir um item dentro de um pedido."""
+    """Schema de leitura para um item individual dentro de um pedido."""
 
     quantity: int
     price_at_purchase: float
-    product: Optional[ProductInCart]
-
+    product: Optional[Product]
     model_config = ConfigDict(from_attributes=True)
 
 
-class Order(BaseModel):
-    """Schema principal para exibir um pedido."""
+class OrderBase(BaseModel):
+    """Schema base com os campos essenciais de um pedido."""
 
     id: int
     created_at: datetime
     total_price: float
-    items: List[OrderItem]
     status: str
+    items: List[OrderItem] = []
+
+
+class Order(OrderBase):
+    """Schema principal de leitura para um pedido de um usuário."""
 
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserInOrder(BaseModel):
-    """Schema para os dados do cliente dentro de um pedido de admin."""
+# -------------------------------------------------------------------------- #
+#                           SCHEMAS DE USUÁRIO E TOKEN                       #
+# -------------------------------------------------------------------------- #
+
+
+class UserBase(BaseModel):
+    """
+    Schema base para um usuário, com todos os seus dados.
+    """
+
+    email: str
+    full_name: str
+    cpf: str
+    phone: str
+    address_street: str
+    address_number: str
+    address_complement: Optional[str] = None
+    address_zip: str
+    address_city: str
+    address_state: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_and_format_cpf(cls, data):
+        """
+        Valida o campo CPF utilizando a biblioteca validate_docbr.
+        Este validador funciona tanto para criação (dicts) quanto para leitura (objetos).
+        """
+        cpf_value = None
+        if isinstance(data, dict):
+            cpf_value = data.get("cpf")
+        elif hasattr(data, "cpf"):
+            cpf_value = data.cpf
+
+        if cpf_value:
+            cpf_validator = CPF()
+            if not cpf_validator.validate(cpf_value):
+                raise ValueError("CPF inválido.")
+            if isinstance(data, dict):
+                data["cpf"] = cpf_validator.mask(cpf_value)
+            else:
+                setattr(data, "cpf", cpf_validator.mask(cpf_value))
+
+        return data
+
+
+class UserCreate(UserBase):
+    """Schema para a criação de um usuário."""
+
+    full_name: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=6)
+
+
+class User(UserBase):
+    """Schema de leitura para um usuário."""
 
     id: int
-    email: str
-    model_config = ConfigDict(from_attributes=True)
+    is_superuser: bool
+    orders: List[Order] = []
 
 
 class AdminOrder(Order):
-    """Schema para um pedido na visão do admin, incluindo dados do cliente."""
+    """Schema de leitura para um pedido na visão do admin."""
 
-    customer: UserInOrder
-    model_config = ConfigDict(from_attributes=True)
+    customer: UserBase
+
+
+class Token(BaseModel):
+    """Schema para o token de acesso JWT."""
+
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    """Schema para os dados decodificados de dentro de um token JWT."""
+
+    email: Optional[str] = None

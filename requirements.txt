@@ -12,3 +12,4 @@ python-multipart
 sqlalchemy
 stripe
 uvicorn[standart]
+validate_docbr

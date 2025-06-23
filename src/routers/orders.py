@@ -11,7 +11,6 @@ protegidos para administradores visualizarem e gerenciarem todos os pedidos.
 # -------------------------------------------------------------------------- #
 from pydantic import BaseModel
 from typing import List
-
 from sqlalchemy.orm import Session, joinedload
 from fastapi import APIRouter, Depends, HTTPException, status
 
@@ -35,60 +34,6 @@ class StatusUpdate(BaseModel):
     """Schema simples para receber a atualização de status no corpo da requisição PUT."""
 
     status: str
-
-
-# -------------------------------------------------------------------------- #
-#                          ENDPOINTS PARA CLIENTES                           #
-# -------------------------------------------------------------------------- #
-
-
-@router.post("/", response_model=schemas.Order, status_code=status.HTTP_201_CREATED)
-def create_order(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user),
-):
-    """Cria um novo pedido a partir do carrinho atual do usuário."""
-    if current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Superusers cannot create orders.",
-        )
-    order = crud.create_order_from_cart(db, user=current_user)
-    if not order:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot create an order from an empty cart.",
-        )
-    return order
-
-
-@router.get("/", response_model=List[schemas.Order])
-def read_my_orders(
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user),
-):
-    """Retorna o histórico de todos os pedidos feitos pelo usuário atual."""
-    return crud.get_orders_by_user(db, user_id=current_user.id)
-
-
-@router.get("/{order_id}", response_model=schemas.Order)
-def read_single_order(
-    order_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user),
-):
-    """Busca e retorna um único pedido pelo seu ID."""
-    order = crud.get_order_by_id(db, order_id=order_id)
-    if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found."
-        )
-    if not current_user.is_superuser and order.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to view this order.",
-        )
-    return order
 
 
 # -------------------------------------------------------------------------- #
@@ -131,11 +76,13 @@ def update_order_status_admin(
 
     order_in_db.status = status_update.status
     db.commit()
-    db.refresh(order_in_db)
 
     reloaded_order = (
         db.query(models.Order)
-        .options(joinedload(models.Order.customer))
+        .options(
+            joinedload(models.Order.customer),
+            joinedload(models.Order.items).joinedload(models.OrderItem.product),
+        )
         .filter(models.Order.id == order_id)
         .first()
     )
@@ -146,3 +93,60 @@ def update_order_status_admin(
         )
 
     return reloaded_order
+
+
+# -------------------------------------------------------------------------- #
+#                          ENDPOINTS PARA CLIENTES                           #
+# -------------------------------------------------------------------------- #
+
+
+@router.post("/", response_model=schemas.Order, status_code=status.HTTP_201_CREATED)
+def create_order(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Cria um novo pedido a partir do carrinho atual do usuário."""
+    if current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superusers cannot create orders.",
+        )
+    order = crud.create_order_from_cart(db, user=current_user)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot create an order from an empty cart.",
+        )
+    return order
+
+
+@router.get("/", response_model=List[schemas.Order])
+def read_my_orders(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Retorna o histórico de todos os pedidos feitos pelo usuário atual."""
+    return crud.get_orders_by_user(db, user_id=current_user.id)
+
+
+@router.get("/{order_id}", response_model=schemas.Order)
+def read_single_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """
+    Busca e retorna um único pedido pelo seu ID.
+    Esta rota deve vir DEPOIS de outras rotas mais específicas como /admin.
+    """
+    order = crud.get_order_by_id(db, order_id=order_id)
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Order not found."
+        )
+    if not current_user.is_superuser and order.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this order.",
+        )
+    return order

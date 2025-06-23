@@ -47,9 +47,7 @@ class Product(Base):
 
 
 class User(Base):
-    """
-    Modelo SQLAlchemy representando a tabela 'users' no banco de dados.
-    """
+    """Modelo SQLAlchemy representando a tabela 'users' no banco de dados."""
 
     __tablename__ = "users"
 
@@ -57,6 +55,17 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
+    full_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    cpf: Mapped[str | None] = mapped_column(
+        String(14), unique=True, nullable=True, index=True
+    )
+    phone: Mapped[str | None] = mapped_column(String(15), nullable=True)
+    address_street: Mapped[str | None] = mapped_column(String, nullable=True)
+    address_number: Mapped[str | None] = mapped_column(String, nullable=True)
+    address_complement: Mapped[str | None] = mapped_column(String, nullable=True)
+    address_zip: Mapped[str | None] = mapped_column(String(9), nullable=True)
+    address_city: Mapped[str | None] = mapped_column(String, nullable=True)
+    address_state: Mapped[str | None] = mapped_column(String(2), nullable=True)
     cart: Mapped["Cart"] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )

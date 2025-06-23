@@ -69,13 +69,15 @@ def get_user_by_email(db: Session, email: str):
 
 
 def create_user(db: Session, user: schemas.UserCreate, is_superuser: bool = False):
-    """
-    Cria um novo usuário, com a senha hasheada.
-    """
+    """Cria um novo usuário, com a senha hasheada e todos os dados pessoais."""
     hashed_password = auth.get_password_hash(user.password)
+
+    user_data = user.model_dump(exclude={"password"})
+
     db_user = models.User(
-        email=user.email, hashed_password=hashed_password, is_superuser=is_superuser
+        **user_data, hashed_password=hashed_password, is_superuser=is_superuser
     )
+
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -89,11 +91,14 @@ def create_user(db: Session, user: schemas.UserCreate, is_superuser: bool = Fals
 
 
 def get_all_users(db: Session, skip: int = 0, limit: int = 100):
-    """
-    [Admin] Busca todos os usuários que não são superusuários (clientes).
-    """
+    """[Admin] Busca todos os usuários (clientes), pré-carregando seus pedidos."""
     return (
         db.query(models.User)
+        .options(
+            selectinload(models.User.orders)
+            .joinedload(models.Order.items)
+            .joinedload(models.OrderItem.product)
+        )
         .filter(models.User.is_superuser.is_(False))
         .offset(skip)
         .limit(limit)
@@ -104,21 +109,17 @@ def get_all_users(db: Session, skip: int = 0, limit: int = 100):
 # -------------------------------------------------------------------------- #
 #                         CRUD FUNCTIONS - PRODUCTS                          #
 # -------------------------------------------------------------------------- #
+
+
 def get_product(db: Session, product_id: int):
     """Busca um único produto pelo seu ID."""
     return db.query(models.Product).filter(models.Product.id == product_id).first()
 
 
 def get_products(
-    db: Session,
-    skip: int = 0,
-    limit: int = 100,
-    category_id: Optional[int] = None,
+    db: Session, skip: int = 0, limit: int = 100, category_id: Optional[int] = None
 ):
-    """
-    Busca uma lista de produtos com paginação.
-    Se category_id for fornecido, filtra os produtos por essa categoria.
-    """
+    """Busca uma lista de produtos, com filtro opcional por categoria."""
     query = db.query(models.Product)
     if category_id is not None:
         query = query.filter(models.Product.category_id == category_id)
@@ -126,7 +127,7 @@ def get_products(
 
 
 def create_product(db: Session, product: schemas.ProductCreate):
-    """Cria um novo produto no banco de dados associado a uma categoria."""
+    """Cria um novo produto no banco de dados."""
     db_product = models.Product(**product.model_dump())
     db.add(db_product)
     db.commit()
@@ -158,6 +159,8 @@ def delete_product(db: Session, product_id: int):
 # -------------------------------------------------------------------------- #
 #                          CRUD FUNCTIONS - CART                             #
 # -------------------------------------------------------------------------- #
+
+
 def get_cart_by_user_id(db: Session, user_id: int):
     """Busca o carrinho de um usuário pelo ID do usuário."""
     return (
@@ -175,13 +178,11 @@ def add_item_to_cart(db: Session, cart_id: int, item: schemas.CartItemCreate):
         .filter_by(cart_id=cart_id, product_id=item.product_id)
         .first()
     )
-
     if db_cart_item:
         db_cart_item.quantity += item.quantity
     else:
         db_cart_item = models.CartItem(**item.model_dump(), cart_id=cart_id)
         db.add(db_cart_item)
-
     db.commit()
     db.refresh(db_cart_item)
     return db_cart_item
@@ -196,7 +197,6 @@ def update_cart_item_quantity(
         .filter_by(cart_id=cart_id, product_id=product_id)
         .first()
     )
-
     if db_cart_item:
         if quantity > 0:
             db_cart_item.quantity = quantity
@@ -235,7 +235,6 @@ def create_order_from_cart(db: Session, user: models.User) -> Optional[models.Or
 
     total_price = 0
     valid_order_items = []
-
     processed_cart_item_ids = []
 
     for item in list(cart.items):
@@ -251,7 +250,9 @@ def create_order_from_cart(db: Session, user: models.User) -> Optional[models.Or
             processed_cart_item_ids.append(item.id)
 
     if not valid_order_items:
-        db.query(models.CartItem).filter(models.CartItem.cart_id == cart.id).delete()
+        db.query(models.CartItem).filter(models.CartItem.cart_id == cart.id).delete(
+            synchronize_session=False
+        )
         db.commit()
         return None
 
@@ -281,10 +282,7 @@ def get_order_by_id(db: Session, order_id: int):
 
 
 def get_all_orders(db: Session, skip: int = 0, limit: int = 100):
-    """
-    Busca todos os pedidos, pré-carregando os relacionamentos com 'selectinload'.
-    Esta abordagem é mais robusta para coleções (one-to-many).
-    """
+    """Busca todos os pedidos, pré-carregando os relacionamentos com 'selectinload'."""
     return (
         db.query(models.Order)
         .options(

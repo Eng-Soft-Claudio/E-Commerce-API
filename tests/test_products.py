@@ -12,16 +12,15 @@ from fastapi.testclient import TestClient
 from typing import Dict
 
 # -------------------------------------------------------------------------- #
-#                        FUNÇÃO AUXILIAR DE SETUP                             #
+#                        FUNÇÃO AUXILIAR DE SETUP                            #
 # -------------------------------------------------------------------------- #
 
 
-def create_category_and_get_id(client: TestClient, headers: Dict) -> int:
+def create_category_and_get_id(
+    client: TestClient, headers: Dict[str, str], title: str = "Categoria Para Produtos"
+) -> int:
     """Função auxiliar para criar uma categoria de teste e retornar seu ID."""
-    category_data = {
-        "title": "Categoria Para Produtos",
-        "description": "Usada nos testes",
-    }
+    category_data = {"title": title, "description": "Usada nos testes"}
     response = client.post("/categories/", headers=headers, json=category_data)
     assert response.status_code == 201
     return response.json()["id"]
@@ -54,12 +53,12 @@ def test_create_product_unauthorized(client: TestClient):
 
 
 # -------------------------------------------------------------------------- #
-#                       TESTES DE CONTROLE DE ACESSO (PERMISSÕES)              #
+#                       TESTES DE CONTROLE DE ACESSO (PERMISSÕES)            #
 # -------------------------------------------------------------------------- #
 
 
 def test_create_product_as_common_user_is_forbidden(
-    client: TestClient, user_token_headers: Dict
+    client: TestClient, user_token_headers: Dict[str, str]
 ):
     """Testa se um usuário comum não pode criar um produto (espera 403)."""
     product_data = {"name": "Produto Proibido", "price": 10.0, "category_id": 1}
@@ -68,26 +67,16 @@ def test_create_product_as_common_user_is_forbidden(
 
 
 # -------------------------------------------------------------------------- #
-#                  TESTES DE CRUD COMPLETO (COMO SUPERUSER)                  #
+#         TESTES DE CRUD COMPLETO E FILTRAGEM (COMO SUPERUSER)               #
 # -------------------------------------------------------------------------- #
 
 
 def test_superuser_product_crud_cycle(
-    client: TestClient, superuser_token_headers: Dict
+    client: TestClient, superuser_token_headers: Dict[str, str]
 ):
-    """
-    Testa o ciclo de vida completo (CRUD) de um produto por um superuser.
-    1. Cria uma categoria para associar ao produto.
-    2. Cria o produto.
-    3. Lê o produto individualmente para verificar a criação.
-    4. Atualiza o produto.
-    5. Deleta o produto.
-    6. Confirma que o produto foi deletado.
-    """
-    # 1. Setup
+    """Testa o ciclo de vida completo (CRUD) de um produto por um superuser."""
     category_id = create_category_and_get_id(client, superuser_token_headers)
 
-    # 2. Criação
     product_data = {"name": "Laptop Pro", "price": 5000, "category_id": category_id}
     create_response = client.post(
         "/products/", headers=superuser_token_headers, json=product_data
@@ -98,12 +87,10 @@ def test_superuser_product_crud_cycle(
     assert product["name"] == product_data["name"]
     assert product["category"]["id"] == category_id
 
-    # 3. Leitura
     read_response = client.get(f"/products/{product_id}")
     assert read_response.status_code == 200
     assert read_response.json()["name"] == product_data["name"]
 
-    # 4. Atualização
     update_data = {"name": "Laptop Ultra", "price": 5500, "description": "Novo!"}
     update_response = client.put(
         f"/products/{product_id}", headers=superuser_token_headers, json=update_data
@@ -111,15 +98,44 @@ def test_superuser_product_crud_cycle(
     assert update_response.status_code == 200
     assert update_response.json()["name"] == update_data["name"]
 
-    # 5. Deleção
     delete_response = client.delete(
         f"/products/{product_id}", headers=superuser_token_headers
     )
     assert delete_response.status_code == 200
 
-    # 6. Confirmação
     confirm_response = client.get(f"/products/{product_id}")
     assert confirm_response.status_code == 404
+
+
+def test_read_products_filtered_by_category(
+    client: TestClient, superuser_token_headers: Dict[str, str]
+):
+    """Testa a listagem de produtos com o filtro de categoria."""
+    cat_a_id = create_category_and_get_id(
+        client, superuser_token_headers, title="Cat A"
+    )
+    cat_b_id = create_category_and_get_id(
+        client, superuser_token_headers, title="Cat B"
+    )
+
+    client.post(
+        "/products/",
+        headers=superuser_token_headers,
+        json={"name": "Produto A", "price": 10, "category_id": cat_a_id},
+    ).raise_for_status()
+    client.post(
+        "/products/",
+        headers=superuser_token_headers,
+        json={"name": "Produto B", "price": 20, "category_id": cat_b_id},
+    ).raise_for_status()
+
+    response = client.get(f"/products/?category_id={cat_a_id}")
+    assert response.status_code == 200
+
+    products = response.json()
+    assert len(products) == 1
+    assert products[0]["name"] == "Produto A"
+    assert products[0]["category"]["id"] == cat_a_id
 
 
 # -------------------------------------------------------------------------- #
@@ -128,7 +144,7 @@ def test_superuser_product_crud_cycle(
 
 
 def test_create_product_with_nonexistent_category(
-    client: TestClient, superuser_token_headers: Dict
+    client: TestClient, superuser_token_headers: Dict[str, str]
 ):
     """Testa a criação de um produto com category_id inválida (espera 404)."""
     product_data = {"name": "Órfão", "price": 10, "category_id": 999}
@@ -139,11 +155,10 @@ def test_create_product_with_nonexistent_category(
     assert response.json()["detail"] == "Category not found to link product"
 
 
-def test_update_nonexistent_product(client: TestClient, superuser_token_headers: Dict):
-    """
-    Testa a atualização de um produto com um ID inexistente.
-    Cobre a linha 56 em routers/products.py. Espera 404.
-    """
+def test_update_nonexistent_product(
+    client: TestClient, superuser_token_headers: Dict[str, str]
+):
+    """Testa a atualização de um produto com um ID inexistente."""
     update_data = {"name": "Produto Fantasma", "price": 99.99}
     response = client.put(
         "/products/9999", headers=superuser_token_headers, json=update_data
@@ -152,11 +167,10 @@ def test_update_nonexistent_product(client: TestClient, superuser_token_headers:
     assert response.json()["detail"] == "Product not found"
 
 
-def test_delete_nonexistent_product(client: TestClient, superuser_token_headers: Dict):
-    """
-    Testa a deleção de um produto com um ID inexistente.
-    Cobre a linha 69 em routers/products.py. Espera 404.
-    """
+def test_delete_nonexistent_product(
+    client: TestClient, superuser_token_headers: Dict[str, str]
+):
+    """Testa a deleção de um produto com um ID inexistente."""
     response = client.delete("/products/9999", headers=superuser_token_headers)
     assert response.status_code == 404
     assert response.json()["detail"] == "Product not found"
