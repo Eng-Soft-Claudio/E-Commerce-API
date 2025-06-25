@@ -88,6 +88,48 @@ def create_user_endpoint(user: schemas.UserCreate, db: Session = Depends(get_db)
     return crud.create_user(db=db, user=user)
 
 
+@router.post("/forgot-password", status_code=status.HTTP_200_OK)
+def forgot_password(
+    request: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)
+):
+    """
+    Inicia o fluxo de recuperação de senha para um usuário.
+    Se o usuário existir, um token é gerado e salvo.
+    """
+    user = crud.get_user_by_email(db, email=request.email)
+    if user:
+        reset_token = auth.create_password_reset_token()
+        crud.create_password_reset_token(db, email=user.email, token=reset_token)
+        print(f"Password reset token for {user.email}: {reset_token}")
+        return {
+            "detail": "If an account with this email exists, a password reset link has been sent.",
+            "token": reset_token, 
+        }
+
+    return {
+        "detail": "If an account with this email exists, a password reset link has been sent."
+    }
+
+
+@router.post("/reset-password", status_code=status.HTTP_200_OK)
+def reset_password(
+    request: schemas.ResetPasswordRequest, db: Session = Depends(get_db)
+):
+    """
+    Finaliza o fluxo de recuperação de senha, definindo uma nova senha.
+    """
+    user = crud.get_user_by_password_reset_token(db, token=request.token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token de recuperação inválido ou expirado.",
+        )
+
+    crud.update_user_password(db, user=user, new_password=request.new_password)
+
+    return {"message": "Senha atualizada com sucesso."}
+
+
 # -------------------------------------------------------------------------- #
 #                             USER PROFILE ENDPOINT                          #
 # -------------------------------------------------------------------------- #

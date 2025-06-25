@@ -242,3 +242,12 @@ class TokenData(BaseModel):
     """Schema para os dados decodificados de dentro de um token JWT."""
 
     email: Optional[str] = None
+
+class ForgotPasswordRequest(BaseModel):
+    """Schema para a solicitação de recuperação de senha."""
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    """Schema para a redefinição de senha com o token."""
+    token: str
+    new_password: str = Field(..., min_length=6)

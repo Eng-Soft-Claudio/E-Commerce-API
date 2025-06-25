@@ -11,6 +11,7 @@ transações e encapsulando as regras de negócio de acesso a dados.
 #                             IMPORTS NECESSÁRIOS                            #
 # -------------------------------------------------------------------------- #
 
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -370,3 +371,72 @@ def get_all_orders(db: Session, skip: int = 0, limit: int = 100) -> list[models.
         .limit(limit)
         .all()
     )
+
+
+# -------------------------------------------------------------------------- #
+#                      CRUD FUNCTIONS - PASSWORD RESET                       #
+# -------------------------------------------------------------------------- #
+
+
+def create_password_reset_token(
+    db: Session, email: str, token: str
+) -> models.PasswordResetToken:
+    """
+    Cria e armazena um novo token de recuperação de senha no banco de dados.
+
+    Define um tempo de expiração para o token (e.g., 1 hora a partir de agora)
+    e o associa ao e-mail do usuário.
+    """
+    expires_delta = timedelta(hours=1)
+    expires_at = datetime.now(timezone.utc) + expires_delta
+
+    db.query(models.PasswordResetToken).filter_by(email=email).update({"used": True})
+
+    reset_token = models.PasswordResetToken(
+        email=email, token=token, expires_at=expires_at
+    )
+    db.add(reset_token)
+    db.commit()
+    db.refresh(reset_token)
+    return reset_token
+
+
+def get_user_by_password_reset_token(db: Session, token: str) -> Optional[models.User]:
+    """
+    Valida um token de recuperação de senha e retorna o usuário correspondente.
+
+    Verifica se o token existe, não foi usado e não expirou. Se for válido,
+    marca o token como usado e retorna o objeto do usuário para que sua senha
+    possa ser alterada.
+    """
+    reset_token = db.query(models.PasswordResetToken).filter_by(token=token).first()
+
+    if not reset_token or reset_token.used:
+        return None
+    token_expires_at = reset_token.expires_at.replace(tzinfo=timezone.utc)
+
+    if token_expires_at < datetime.now(timezone.utc):
+        return None
+    user = get_user_by_email(db, email=reset_token.email)
+    if not user:
+        return None
+
+    reset_token.used = True
+    db.commit()
+
+    return user
+
+
+def update_user_password(
+    db: Session, user: models.User, new_password: str
+) -> models.User:
+    """
+    Atualiza a senha de um usuário específico no banco de dados.
+
+    Recebe o objeto do usuário e a nova senha, gera o hash e salva
+    a alteração.
+    """
+    user.hashed_password = auth.get_password_hash(new_password)
+    db.commit()
+    db.refresh(user)
+    return user

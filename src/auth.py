@@ -4,7 +4,7 @@ Módulo de Autenticação e Segurança.
 Contém toda a lógica para hashing de senhas, criação e verificação
 de tokens JWT, e as dependências do FastAPI para proteger endpoints.
 """
-
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -83,6 +83,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+def create_password_reset_token() -> str:
+    """Gera um token criptograficamente seguro para o reset de senha."""
+    return secrets.token_urlsafe(32)
 
 
 # -------------------------------------------------------------------------- #

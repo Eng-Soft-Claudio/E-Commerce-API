@@ -10,6 +10,7 @@ scripts de migração e pela aplicação para interagir com os dados.
 # -------------------------------------------------------------------------- #
 #                             IMPORTS NECESSÁRIOS                            #
 # -------------------------------------------------------------------------- #
+from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
@@ -18,6 +19,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -159,7 +161,7 @@ class Order(Base):
     __tablename__ = "orders"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     total_price: Mapped[float] = mapped_column(Float)
     status: Mapped[str] = mapped_column(String, default="pending_payment")
     payment_intent_id: Mapped[Optional[str]] = mapped_column(
@@ -184,3 +186,28 @@ class OrderItem(Base):
     price_at_purchase: Mapped[float] = mapped_column(Float)
 
     product: Mapped[Optional["Product"]] = relationship()
+
+
+# -------------------------------------------------------------------------- #
+#                        MODELO DE RECUPERAÇÃO DE SENHA                      #
+# -------------------------------------------------------------------------- #
+
+
+class PasswordResetToken(Base):
+    """
+    Modelo para armazenar tokens de recuperação de senha.
+
+    Cada token é associado a um email, tem um tempo de vida limitado e
+    só pode ser usado uma vez, garantindo a segurança do processo de
+    recuperação de conta.
+    """
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String, index=True)
+    token: Mapped[str] = mapped_column(String, unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    __table_args__ = (UniqueConstraint("email", "token"),)
