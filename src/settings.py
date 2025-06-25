@@ -10,8 +10,9 @@ encontrado independentemente do diretório de trabalho atual.
 #                             IMPORTS NECESSÁRIOS                            #
 # -------------------------------------------------------------------------- #
 from pathlib import Path
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, PostgresDsn, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Optional  # noqa: F401
 
 # -------------------------------------------------------------------------- #
 #                         CONFIGURAÇÃO DE CAMINHOS                           #
@@ -30,6 +31,25 @@ class Settings(BaseSettings):
     Valida a presença de chaves essenciais para o funcionamento da aplicação.
     """
 
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_SERVER: str
+    POSTGRES_PORT: int = 5432
+    POSTGRES_DB: str
+
+    @computed_field
+    @property
+    def DATABASE_URL(self) -> PostgresDsn:
+        return PostgresDsn.build(
+            scheme="postgresql",
+            username=self.POSTGRES_USER,
+            password=self.POSTGRES_PASSWORD,
+            host=self.POSTGRES_SERVER,
+            port=self.POSTGRES_PORT,
+            path=self.POSTGRES_DB,
+        )
+
+    JWT_SECRET_KEY: str = Field(...)
     STRIPE_SECRET_KEY: str = Field(...)
     STRIPE_WEBHOOK_SECRET: str = Field(...)
     CLIENT_URL: str = "http://localhost:3000"

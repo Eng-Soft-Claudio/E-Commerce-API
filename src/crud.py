@@ -1,31 +1,40 @@
 """
 Módulo CRUD (Create, Read, Update, Delete) para os modelos.
 
-Este arquivo abstrai a lógica de acesso ao banco de dados, separando-a
-da lógica dos endpoints da API. Cada função aqui interage diretamente com
-a sessão do banco de dados para manipular os dados.
+Este arquivo abstrai a lógica de acesso ao banco de dados, separando-a da
+lógica dos endpoints da API. Cada função aqui interage diretamente com a
+sessão do SQLAlchemy para manipular os dados, garantindo a consistência das
+transações e encapsulando as regras de negócio de acesso a dados.
 """
 
-from typing import Optional
+# -------------------------------------------------------------------------- #
+#                             IMPORTS NECESSÁRIOS                            #
+# -------------------------------------------------------------------------- #
+
+from typing import Any, Dict, Optional
+
 from sqlalchemy.orm import Session, joinedload, selectinload
-from . import models, schemas, auth
+
+from . import auth, models, schemas
 
 # -------------------------------------------------------------------------- #
 #                         CRUD FUNCTIONS - CATEGORY                          #
 # -------------------------------------------------------------------------- #
 
 
-def get_category(db: Session, category_id: int):
+def get_category(db: Session, category_id: int) -> Optional[models.Category]:
     """Busca uma única categoria pelo seu ID."""
     return db.query(models.Category).filter(models.Category.id == category_id).first()
 
 
-def get_categories(db: Session, skip: int = 0, limit: int = 100):
+def get_categories(
+    db: Session, skip: int = 0, limit: int = 100
+) -> list[models.Category]:
     """Busca uma lista de categorias com paginação."""
     return db.query(models.Category).offset(skip).limit(limit).all()
 
 
-def create_category(db: Session, category: schemas.CategoryCreate):
+def create_category(db: Session, category: schemas.CategoryCreate) -> models.Category:
     """Cria uma nova categoria no banco de dados."""
     db_category = models.Category(
         title=category.title, description=category.description
@@ -38,7 +47,7 @@ def create_category(db: Session, category: schemas.CategoryCreate):
 
 def update_category(
     db: Session, category_id: int, category_data: schemas.CategoryCreate
-):
+) -> Optional[models.Category]:
     """Atualiza uma categoria existente no banco de dados."""
     db_category = get_category(db, category_id)
     if db_category:
@@ -49,7 +58,7 @@ def update_category(
     return db_category
 
 
-def delete_category(db: Session, category_id: int):
+def delete_category(db: Session, category_id: int) -> Optional[models.Category]:
     """Deleta uma categoria do banco de dados."""
     db_category = get_category(db, category_id)
     if db_category:
@@ -63,21 +72,21 @@ def delete_category(db: Session, category_id: int):
 # -------------------------------------------------------------------------- #
 
 
-def get_user_by_email(db: Session, email: str):
+def get_user_by_email(db: Session, email: str) -> Optional[models.User]:
     """Busca um usuário pelo seu email."""
     return db.query(models.User).filter(models.User.email == email).first()
 
 
-def create_user(db: Session, user: schemas.UserCreate, is_superuser: bool = False):
+def create_user(
+    db: Session, user: schemas.UserCreate, is_superuser: bool = False
+) -> models.User:
     """Cria um novo usuário, com a senha hasheada e todos os dados pessoais."""
     hashed_password = auth.get_password_hash(user.password)
-
-    user_data = user.model_dump(exclude={"password"})
-
     db_user = models.User(
-        **user_data, hashed_password=hashed_password, is_superuser=is_superuser
+        **user.model_dump(exclude={"password"}),
+        hashed_password=hashed_password,
+        is_superuser=is_superuser,
     )
-
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -90,15 +99,10 @@ def create_user(db: Session, user: schemas.UserCreate, is_superuser: bool = Fals
     return db_user
 
 
-def get_all_users(db: Session, skip: int = 0, limit: int = 100):
-    """[Admin] Busca todos os usuários (clientes), pré-carregando seus pedidos."""
+def get_all_users(db: Session, skip: int = 0, limit: int = 100) -> list[models.User]:
+    """[Admin] Busca todos os usuários (clientes), com paginação."""
     return (
         db.query(models.User)
-        .options(
-            selectinload(models.User.orders)
-            .joinedload(models.Order.items)
-            .joinedload(models.OrderItem.product)
-        )
         .filter(models.User.is_superuser.is_(False))
         .offset(skip)
         .limit(limit)
@@ -111,14 +115,19 @@ def get_all_users(db: Session, skip: int = 0, limit: int = 100):
 # -------------------------------------------------------------------------- #
 
 
-def get_product(db: Session, product_id: int):
+def get_product(db: Session, product_id: int) -> Optional[models.Product]:
     """Busca um único produto pelo seu ID."""
     return db.query(models.Product).filter(models.Product.id == product_id).first()
 
 
+def get_product_by_sku(db: Session, sku: str) -> Optional[models.Product]:
+    """Busca um único produto pelo seu SKU."""
+    return db.query(models.Product).filter(models.Product.sku == sku).first()
+
+
 def get_products(
     db: Session, skip: int = 0, limit: int = 100, category_id: Optional[int] = None
-):
+) -> list[models.Product]:
     """Busca uma lista de produtos, com filtro opcional por categoria."""
     query = db.query(models.Product)
     if category_id is not None:
@@ -126,7 +135,7 @@ def get_products(
     return query.offset(skip).limit(limit).all()
 
 
-def create_product(db: Session, product: schemas.ProductCreate):
+def create_product(db: Session, product: schemas.ProductCreate) -> models.Product:
     """Cria um novo produto no banco de dados."""
     db_product = models.Product(**product.model_dump())
     db.add(db_product)
@@ -135,19 +144,25 @@ def create_product(db: Session, product: schemas.ProductCreate):
     return db_product
 
 
-def update_product(db: Session, product_id: int, product_data: schemas.ProductUpdate):
-    """Atualiza um produto existente no banco de dados."""
+def update_product(
+    db: Session, product_id: int, product_data: schemas.ProductUpdate
+) -> Optional[models.Product]:
+    """Atualiza um produto existente, tratando apenas os campos fornecidos."""
     db_product = get_product(db, product_id)
-    if db_product:
-        db_product.name = product_data.name
-        db_product.price = product_data.price
-        db_product.description = product_data.description
-        db.commit()
-        db.refresh(db_product)
+    if not db_product:
+        return None
+
+    update_data: Dict[str, Any] = product_data.model_dump(exclude_unset=True)
+
+    for key, value in update_data.items():
+        setattr(db_product, key, value)
+
+    db.commit()
+    db.refresh(db_product)
     return db_product
 
 
-def delete_product(db: Session, product_id: int):
+def delete_product(db: Session, product_id: int) -> Optional[models.Product]:
     """Deleta um produto do banco de dados."""
     db_product = get_product(db, product_id)
     if db_product:
@@ -161,8 +176,8 @@ def delete_product(db: Session, product_id: int):
 # -------------------------------------------------------------------------- #
 
 
-def get_cart_by_user_id(db: Session, user_id: int):
-    """Busca o carrinho de um usuário pelo ID do usuário."""
+def get_cart_by_user_id(db: Session, user_id: int) -> Optional[models.Cart]:
+    """Busca o carrinho de um usuário pelo ID do usuário, pré-carregando os itens."""
     return (
         db.query(models.Cart)
         .options(joinedload(models.Cart.items).joinedload(models.CartItem.product))
@@ -171,18 +186,35 @@ def get_cart_by_user_id(db: Session, user_id: int):
     )
 
 
-def add_item_to_cart(db: Session, cart_id: int, item: schemas.CartItemCreate):
-    """Adiciona ou atualiza um item no carrinho."""
+def add_item_to_cart(
+    db: Session, cart_id: int, item: schemas.CartItemCreate
+) -> Optional[models.CartItem]:
+    """
+    Adiciona um item ao carrinho ou atualiza sua quantidade.
+    Retorna `None` se não houver estoque suficiente.
+    """
+    product = get_product(db, item.product_id)
+    if not product:
+        return None
+
     db_cart_item = (
         db.query(models.CartItem)
         .filter_by(cart_id=cart_id, product_id=item.product_id)
         .first()
     )
+
+    current_quantity = db_cart_item.quantity if db_cart_item else 0
+    requested_quantity = current_quantity + item.quantity
+
+    if product.stock < requested_quantity:
+        return None
+
     if db_cart_item:
-        db_cart_item.quantity += item.quantity
+        db_cart_item.quantity = requested_quantity
     else:
         db_cart_item = models.CartItem(**item.model_dump(), cart_id=cart_id)
         db.add(db_cart_item)
+
     db.commit()
     db.refresh(db_cart_item)
     return db_cart_item
@@ -190,26 +222,37 @@ def add_item_to_cart(db: Session, cart_id: int, item: schemas.CartItemCreate):
 
 def update_cart_item_quantity(
     db: Session, cart_id: int, product_id: int, quantity: int
-):
-    """Atualiza a quantidade de um item específico no carrinho."""
+) -> Optional[models.CartItem]:
+    """
+    Atualiza a quantidade de um item específico no carrinho.
+    Retorna `None` se a quantidade for inválida, o item não existir,
+    ou o estoque for insuficiente.
+    """
+    if quantity <= 0:
+        remove_cart_item(db, cart_id=cart_id, product_id=product_id)
+        return None
+
     db_cart_item = (
         db.query(models.CartItem)
         .filter_by(cart_id=cart_id, product_id=product_id)
         .first()
     )
-    if db_cart_item:
-        if quantity > 0:
-            db_cart_item.quantity = quantity
-            db.commit()
-            db.refresh(db_cart_item)
-        else:
-            db.delete(db_cart_item)
-            db.commit()
-            return None
+    if not db_cart_item or not db_cart_item.product:
+        return None
+
+    if db_cart_item.product.stock < quantity:
+        return None
+
+    db_cart_item.quantity = quantity
+    db.commit()
+    db.refresh(db_cart_item)
+
     return db_cart_item
 
 
-def remove_cart_item(db: Session, cart_id: int, product_id: int):
+def remove_cart_item(
+    db: Session, cart_id: int, product_id: int
+) -> Optional[models.CartItem]:
     """Remove um item do carrinho pelo ID do produto."""
     db_cart_item = (
         db.query(models.CartItem)
@@ -227,61 +270,94 @@ def remove_cart_item(db: Session, cart_id: int, product_id: int):
 # -------------------------------------------------------------------------- #
 
 
-def create_order_from_cart(db: Session, user: models.User) -> Optional[models.Order]:
-    """Cria um pedido a partir do carrinho de um usuário, ignorando itens cujo produto foi deletado."""
+class OrderCreationError(Exception):
+    """Exceção customizada para erros na criação do pedido."""
+
+    def __init__(self, message: str, status_code: int = 400):
+        self.message = message
+        self.status_code = status_code
+        super().__init__(self.message)
+
+
+def create_order_from_cart(db: Session, user: models.User) -> models.Order:
+    """
+    Cria um pedido a partir do carrinho de um usuário, decrementando o estoque.
+    A operação é transacional: ou tudo funciona, ou nada é alterado.
+    Lança `OrderCreationError` em caso de falha (carrinho vazio, estoque).
+    """
     cart = get_cart_by_user_id(db, user.id)
     if not cart or not cart.items:
-        return None
+        raise OrderCreationError("Carrinho vazio. Não é possível criar um pedido.")
 
-    total_price = 0
-    valid_order_items = []
-    processed_cart_item_ids = []
+    total_price = 0.0
+    order_items_to_create = []
 
-    for item in list(cart.items):
-        if item.product:
-            total_price += item.product.price * item.quantity
-            valid_order_items.append(
+    try:
+        for item in cart.items:
+            product = (
+                db.query(models.Product)
+                .filter_by(id=item.product_id)
+                .with_for_update()
+                .first()
+            )
+
+            if not product:
+                raise OrderCreationError(
+                    f"Produto com ID {item.product_id} não existe mais."
+                )
+
+            if product.stock < item.quantity:
+                raise OrderCreationError(
+                    f"Estoque insuficiente para o produto '{product.name}'."
+                )
+
+            product.stock -= item.quantity
+            total_price += product.price * item.quantity
+
+            order_items_to_create.append(
                 models.OrderItem(
-                    product_id=item.product.id,
+                    product_id=product.id,
                     quantity=item.quantity,
-                    price_at_purchase=item.product.price,
+                    price_at_purchase=product.price,
                 )
             )
-            processed_cart_item_ids.append(item.id)
 
-    if not valid_order_items:
-        db.query(models.CartItem).filter(models.CartItem.cart_id == cart.id).delete(
-            synchronize_session=False
+        new_order = models.Order(
+            user_id=user.id, total_price=total_price, items=order_items_to_create
         )
+        db.add(new_order)
+
+        db.query(models.CartItem).filter(models.CartItem.cart_id == cart.id).delete()
+
         db.commit()
-        return None
+        db.refresh(new_order)
+        return new_order
 
-    new_order = models.Order(
-        user_id=user.id, total_price=total_price, items=valid_order_items
-    )
-    db.add(new_order)
-
-    if processed_cart_item_ids:
-        db.query(models.CartItem).filter(
-            models.CartItem.id.in_(processed_cart_item_ids)
-        ).delete(synchronize_session=False)
-
-    db.commit()
-    db.refresh(new_order)
-    return new_order
+    except Exception as e:
+        db.rollback()
+        if isinstance(e, OrderCreationError):
+            raise e
+        raise OrderCreationError(
+            f"Ocorreu um erro inesperado: {str(e)}", status_code=500
+        )
 
 
-def get_orders_by_user(db: Session, user_id: int):
+def get_orders_by_user(db: Session, user_id: int) -> list[models.Order]:
     """Busca todos os pedidos de um usuário."""
-    return db.query(models.Order).filter(models.Order.user_id == user_id).all()
+    return (
+        db.query(models.Order)
+        .filter(models.Order.user_id == user_id)
+        .order_by(models.Order.created_at.desc())
+        .all()
+    )
 
 
-def get_order_by_id(db: Session, order_id: int):
+def get_order_by_id(db: Session, order_id: int) -> Optional[models.Order]:
     """Busca um pedido específico pelo seu ID."""
     return db.query(models.Order).filter(models.Order.id == order_id).first()
 
 
-def get_all_orders(db: Session, skip: int = 0, limit: int = 100):
+def get_all_orders(db: Session, skip: int = 0, limit: int = 100) -> list[models.Order]:
     """Busca todos os pedidos, pré-carregando os relacionamentos com 'selectinload'."""
     return (
         db.query(models.Order)

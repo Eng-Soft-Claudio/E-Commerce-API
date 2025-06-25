@@ -1,14 +1,22 @@
 """
 Módulo de Roteamento para o recurso 'Categoria'.
 
-Define todos os endpoints da API relacionados a categorias usando um APIRouter,
-que será incluído na aplicação principal FastAPI.
+Define todos os endpoints da API relacionados a categorias, permitindo o CRUD
+(Create, Read, Update, Delete). As operações de escrita (CUD) são protegidas
+e exigem privilégios de administrador, enquanto a leitura é pública para que
+os clientes possam navegar pelas categorias de produtos.
 """
+
+# -------------------------------------------------------------------------- #
+#                             IMPORTS NECESSÁRIOS                            #
+# -------------------------------------------------------------------------- #
+
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from .. import crud, schemas, auth
+from .. import auth, crud, schemas
 from ..database import get_db
 
 # -------------------------------------------------------------------------- #
@@ -18,7 +26,7 @@ from ..database import get_db
 router = APIRouter(prefix="/categories", tags=["Categories"])
 
 # -------------------------------------------------------------------------- #
-#                         CATEGORY API ENDPOINTS                             #
+#                        CATEGORY API ENDPOINTS (PROTEGIDOS)                 #
 # -------------------------------------------------------------------------- #
 
 
@@ -31,7 +39,7 @@ router = APIRouter(prefix="/categories", tags=["Categories"])
 def create_category_endpoint(
     category: schemas.CategoryCreate, db: Session = Depends(get_db)
 ):
-    """Cria uma nova categoria. Requer privilégios de administrador."""
+    """[Admin] Cria uma nova categoria de produtos."""
     return crud.create_category(db=db, category=category)
 
 
@@ -43,12 +51,12 @@ def create_category_endpoint(
 def update_category_endpoint(
     category_id: int, category: schemas.CategoryCreate, db: Session = Depends(get_db)
 ):
-    """Atualiza uma categoria. Requer privilégios de administrador."""
+    """[Admin] Atualiza os dados de uma categoria existente."""
     db_category = crud.update_category(
         db, category_id=category_id, category_data=category
     )
-    if db_category is None:
-        raise HTTPException(status_code=404, detail="Category not found")
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Categoria não encontrada.")
     return db_category
 
 
@@ -58,27 +66,31 @@ def update_category_endpoint(
     dependencies=[Depends(auth.get_current_superuser)],
 )
 def delete_category_endpoint(category_id: int, db: Session = Depends(get_db)):
-    """Deleta uma categoria. Requer privilégios de administrador."""
+    """[Admin] Deleta uma categoria do sistema."""
     db_category = crud.delete_category(db, category_id=category_id)
-    if db_category is None:
-        raise HTTPException(status_code=404, detail="Category not found")
-    return {"message": "Category deleted successfully"}
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Categoria não encontrada.")
+    return {"message": "Categoria deletada com sucesso."}
 
 
-# --- Operações de Leitura (PÚBLICAS) ---
-@router.get("/", response_model=list[schemas.Category])
+# -------------------------------------------------------------------------- #
+#                        CATEGORY API ENDPOINTS (PÚBLICOS)                   #
+# -------------------------------------------------------------------------- #
+
+
+@router.get("/", response_model=List[schemas.Category])
 def read_categories_endpoint(
     skip: int = 0, limit: int = 100, db: Session = Depends(get_db)
 ):
-    """Lista todas as categorias. Acesso público."""
+    """[Público] Lista todas as categorias disponíveis."""
     categories = crud.get_categories(db, skip=skip, limit=limit)
     return categories
 
 
 @router.get("/{category_id}", response_model=schemas.Category)
 def read_category_endpoint(category_id: int, db: Session = Depends(get_db)):
-    """Busca uma única categoria pelo ID. Acesso público."""
+    """[Público] Busca uma única categoria pelo seu ID."""
     db_category = crud.get_category(db, category_id=category_id)
-    if db_category is None:
-        raise HTTPException(status_code=404, detail="Category not found")
+    if not db_category:
+        raise HTTPException(status_code=404, detail="Categoria não encontrada.")
     return db_category

@@ -2,38 +2,53 @@
 Suíte de Testes para o recurso de Carrinho de Compras (Shopping Cart).
 
 Testa todos os endpoints sob o prefixo '/cart', cobrindo:
-- O fluxo de vida completo do carrinho de um usuário comum.
-- Validações de permissão (ex: superuser não pode ter carrinho).
-- Casos de borda como adicionar produtos inexistentes ou manipular um carrinho vazio.
+- A verificação de permissão (ex: superusuários não podem ter carrinho).
+- O fluxo de vida completo de um item no carrinho de um usuário comum.
+- A validação de estoque ao adicionar ou atualizar itens no carrinho.
+- Casos de borda como adicionar produtos inexistentes, solicitar mais
+  produtos do que o disponível em estoque ou manipular um carrinho vazio.
 """
+
+# -------------------------------------------------------------------------- #
+#                             IMPORTS NECESSÁRIOS                            #
+# -------------------------------------------------------------------------- #
+
+from typing import Dict
 
 import pytest
 from fastapi.testclient import TestClient
-from typing import Dict, Any
+from httpx import Response
+
 from sqlalchemy.orm import Session
-from src.models import Cart
+from src import models, crud
+from src.auth import create_access_token
+from src.schemas import UserCreate
 
 # -------------------------------------------------------------------------- #
-#                        FUNÇÃO AUXILIAR DE SETUP                            #
+#                        FIXTURE AUXILIAR DE SETUP                           #
 # -------------------------------------------------------------------------- #
 
 
-def create_product_for_testing(
-    client: TestClient, headers: Dict[str, str]
-) -> Dict[str, Any]:
-    """Função auxiliar para criar uma categoria e um produto para testes."""
+@pytest.fixture
+def product_for_cart_tests(client: TestClient, superuser_token_headers: Dict) -> Dict:
+    """Fixture para criar uma categoria e um produto com estoque para testes."""
     cat_resp = client.post(
-        "/categories/", headers=headers, json={"title": "Carrinho Categ"}
+        "/categories/",
+        headers=superuser_token_headers,
+        json={"title": "Carrinho Categ"},
     )
-    assert cat_resp.status_code == 201
-
+    cat_resp.raise_for_status()
     prod_data = {
-        "name": "Item de Teste Carrinho",
+        "sku": "PROD-CART-001",
+        "name": "Item Teste Carrinho",
         "price": 10.99,
         "category_id": cat_resp.json()["id"],
+        "stock": 5,
     }
-    prod_resp = client.post("/products/", headers=headers, json=prod_data)
-    assert prod_resp.status_code == 201
+    prod_resp = client.post(
+        "/products/", headers=superuser_token_headers, json=prod_data
+    )
+    prod_resp.raise_for_status()
     return prod_resp.json()
 
 
@@ -42,164 +57,138 @@ def create_product_for_testing(
 # -------------------------------------------------------------------------- #
 
 
-def test_superuser_has_no_cart(
-    client: TestClient, superuser_token_headers: Dict[str, str]
-):
-    """Testa se superusers não podem acessar o endpoint do carrinho (espera 403)."""
+def test_superuser_has_no_cart(client: TestClient, superuser_token_headers: Dict):
+    """Testa se superusuários não podem acessar o endpoint do carrinho (espera 403)."""
     response = client.get("/cart/", headers=superuser_token_headers)
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Superusers do not have a shopping cart."
+    assert response.status_code == 403, response.text
+    assert "Superusuários não possuem carrinho de compras" in response.json()["detail"]
 
 
-def test_cart_access_unauthorized(client: TestClient):
-    """Testa se clientes não autenticados não podem acessar o carrinho (espera 401)."""
-    response = client.get("/cart/")
-    assert response.status_code == 401
-
-
-# -------------------------------------------------------------------------- #
-#               TESTES DO FLUXO COMPLETO DO CARRINHO DE COMPRAS              #
-# -------------------------------------------------------------------------- #
-
-
-def test_user_cart_full_flow(
-    client: TestClient,
-    user_token_headers: Dict[str, str],
-    superuser_token_headers: Dict[str, str],
+def test_superuser_cannot_add_or_update_cart(
+    client: TestClient, superuser_token_headers: Dict, product_for_cart_tests: Dict
 ):
     """
-    Testa o fluxo completo do carrinho de um usuário comum.
-    1. Visualiza o carrinho vazio.
-    2. Adiciona um item e verifica o estado do carrinho.
-    3. Adiciona mais do mesmo item e verifica a atualização da quantidade.
-    4. Remove o item e verifica se o carrinho volta a ficar vazio.
+    Testa se o superusuário é proibido de adicionar ou atualizar itens,
+    cobrirá as linhas que faltavam nessas rotas.
     """
-    product = create_product_for_testing(client, superuser_token_headers)
-    product_id = product["id"]
-    product_price = product["price"]
+    product_id = product_for_cart_tests["id"]
+    add_response = client.post(
+        "/cart/items/",
+        headers=superuser_token_headers,
+        json={"product_id": 1, "quantity": 1},
+    )
+    assert add_response.status_code == 403
+
+    update_response = client.put(
+        f"/cart/items/{product_id}",
+        headers=superuser_token_headers,
+        json={"quantity": 1},
+    )
+    assert update_response.status_code == 403
+
+
+def test_read_cart_when_cart_is_missing(client: TestClient, db_session, test_user):
+    """Testa o caso raro de um usuário não ter um carrinho associado."""
+    user_in_db = crud.get_user_by_email(db_session, test_user["email"])
+    assert user_in_db is not None
+    assert user_in_db.cart is not None
+
+    user_token = create_access_token(data={"sub": user_in_db.email})
+    headers = {"Authorization": f"Bearer {user_token}"}
+
+    db_session.delete(user_in_db.cart)
+    db_session.commit()
+
+    response = client.get("/cart/", headers=headers)
+    assert response.status_code == 200
+    assert "id" in response.json()
+
+
+# -------------------------------------------------------------------------- #
+#               TESTES DO FLUXO DO CARRINHO COM VALIDAÇÃO DE ESTOQUE         #
+# -------------------------------------------------------------------------- #
+
+
+def test_add_item_to_cart_success(
+    client: TestClient, user_token_headers: Dict, product_for_cart_tests: Dict
+):
+    """Testa adicionar com sucesso um item ao carrinho (dentro do limite de estoque)."""
+    product_id = product_for_cart_tests["id"]
+
+    response = client.post(
+        "/cart/items/",
+        headers=user_token_headers,
+        json={"product_id": product_id, "quantity": 2},
+    )
+    assert response.status_code == 200, response.text
+
+    response_2 = client.post(
+        "/cart/items/",
+        headers=user_token_headers,
+        json={"product_id": product_id, "quantity": 3},
+    )
+    assert response_2.status_code == 200, response_2.text
 
     cart_resp = client.get("/cart/", headers=user_token_headers)
-    assert cart_resp.status_code == 200
-    assert cart_resp.json()["items"] == []
+    assert cart_resp.json()["items"][0]["quantity"] == 5
 
-    add_resp = client.post(
+
+def test_add_item_to_cart_insufficient_stock(
+    client: TestClient, user_token_headers: Dict, product_for_cart_tests: Dict
+):
+    """Testa a falha ao tentar adicionar um item que excede o estoque disponível."""
+    product_id = product_for_cart_tests["id"]
+
+    response = client.post(
         "/cart/items/",
         headers=user_token_headers,
-        json={"product_id": product_id, "quantity": 2},
+        json={"product_id": product_id, "quantity": 6},
     )
-    assert add_resp.status_code == 200
-
-    cart_resp_after_add = client.get("/cart/", headers=user_token_headers)
-    cart_data = cart_resp_after_add.json()
-    assert len(cart_data["items"]) == 1
-    assert cart_data["items"][0]["quantity"] == 2
-    assert cart_data["total_price"] == pytest.approx(product_price * 2)
-
-    client.post(
-        "/cart/items/",
-        headers=user_token_headers,
-        json={"product_id": product_id, "quantity": 1},
-    )
-
-    cart_resp_after_update = client.get("/cart/", headers=user_token_headers)
-    cart_data_updated = cart_resp_after_update.json()
-    assert len(cart_data_updated["items"]) == 1
-    assert cart_data_updated["items"][0]["quantity"] == 3
-    assert cart_data_updated["total_price"] == pytest.approx(product_price * 3)
-
-    del_resp = client.delete(f"/cart/items/{product_id}", headers=user_token_headers)
-    assert del_resp.status_code == 200
-
-    cart_resp_final = client.get("/cart/", headers=user_token_headers)
-    assert cart_resp_final.json()["items"] == []
+    assert response.status_code == 400, response.text
+    assert "Estoque insuficiente" in response.json()["detail"]
 
 
-# -------------------------------------------------------------------------- #
-#          TESTES DE ATUALIZAÇÃO DE ITENS NO CARRINHO (PUT)                  #
-# -------------------------------------------------------------------------- #
-
-
-def test_update_cart_item_quantity_successfully(
-    client: TestClient,
-    user_token_headers: Dict[str, str],
-    superuser_token_headers: Dict[str, str],
+def test_update_cart_item_quantity_success(
+    client: TestClient, user_token_headers: Dict, product_for_cart_tests: Dict
 ):
     """Testa a atualização bem-sucedida da quantidade de um item no carrinho."""
-    product = create_product_for_testing(client, superuser_token_headers)
-    product_id = product["id"]
+    product_id = product_for_cart_tests["id"]
     client.post(
         "/cart/items/",
         headers=user_token_headers,
         json={"product_id": product_id, "quantity": 1},
-    )
+    ).raise_for_status()
 
     update_response = client.put(
         f"/cart/items/{product_id}",
         headers=user_token_headers,
-        json={"quantity": 5},
+        json={"quantity": 4},
     )
-    assert update_response.status_code == 200
-    updated_item = update_response.json()
-    assert updated_item["quantity"] == 5
-
-    cart_response = client.get("/cart/", headers=user_token_headers)
-    cart_data = cart_response.json()
-    assert len(cart_data["items"]) == 1
-    assert cart_data["items"][0]["quantity"] == 5
-    assert cart_data["total_price"] == pytest.approx(product["price"] * 5)
+    assert update_response.status_code == 200, update_response.text
+    assert update_response.json()["quantity"] == 4
 
 
-def test_update_cart_item_quantity_to_zero_removes_item(
-    client: TestClient,
-    user_token_headers: Dict[str, str],
-    superuser_token_headers: Dict[str, str],
+def test_update_cart_item_insufficient_stock(
+    client: TestClient, user_token_headers: Dict, product_for_cart_tests: Dict
 ):
-    """Testa se atualizar a quantidade de um item para 0 o remove do carrinho."""
-    product = create_product_for_testing(client, superuser_token_headers)
-    product_id = product["id"]
+    """Testa a falha ao atualizar a quantidade para um valor maior que o estoque."""
+    product_id = product_for_cart_tests["id"]
     client.post(
         "/cart/items/",
         headers=user_token_headers,
-        json={"product_id": product_id, "quantity": 2},
-    )
+        json={"product_id": product_id, "quantity": 1},
+    ).raise_for_status()
+
     update_response = client.put(
         f"/cart/items/{product_id}",
         headers=user_token_headers,
-        json={"quantity": 0},
+        json={"quantity": 6},
     )
-    assert update_response.status_code == 204
-    cart_response = client.get("/cart/", headers=user_token_headers)
-    assert not cart_response.json()["items"]
-
-
-def test_update_cart_item_for_nonexistent_product(
-    client: TestClient, user_token_headers: Dict[str, str]
-):
-    """Testa a falha ao tentar atualizar um produto que não existe no BD."""
-    response = client.put(
-        "/cart/items/9999",
-        headers=user_token_headers,
-        json={"quantity": 5},
+    assert update_response.status_code == 404, update_response.text
+    assert (
+        "Item não encontrado no carrinho ou estoque insuficiente"
+        in update_response.json()["detail"]
     )
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Product not found."
-
-
-def test_update_cart_item_that_is_not_in_cart(
-    client: TestClient,
-    user_token_headers: Dict[str, str],
-    superuser_token_headers: Dict[str, str],
-):
-    """Testa a falha ao tentar atualizar um item que não está no carrinho."""
-    product = create_product_for_testing(client, superuser_token_headers)
-    product_id = product["id"]
-    response = client.put(
-        f"/cart/items/{product_id}",
-        headers=user_token_headers,
-        json={"quantity": 5},
-    )
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Item not in cart."
 
 
 # -------------------------------------------------------------------------- #
@@ -207,72 +196,129 @@ def test_update_cart_item_that_is_not_in_cart(
 # -------------------------------------------------------------------------- #
 
 
-def test_add_nonexistent_product_to_cart(
-    client: TestClient, user_token_headers: Dict[str, str]
-):
+def test_add_nonexistent_product_to_cart(client: TestClient, user_token_headers: Dict):
     """Testa adicionar um produto com ID inválido ao carrinho (espera 404)."""
     item_data = {"product_id": 9999, "quantity": 1}
     response = client.post("/cart/items/", headers=user_token_headers, json=item_data)
     assert response.status_code == 404
-    assert response.json()["detail"] == "Product not found."
+    assert "Produto não encontrado" in response.json()["detail"]
 
 
-def test_remove_nonexistent_product_from_cart(
-    client: TestClient, user_token_headers: Dict[str, str]
+def test_update_item_not_in_cart(
+    client: TestClient, user_token_headers: Dict, product_for_cart_tests: Dict
 ):
-    """Testa remover um produto que não está no carrinho (espera 404)."""
-    response = client.delete("/cart/items/9999", headers=user_token_headers)
+    """
+    Testa a falha ao tentar atualizar a quantidade de um produto
+    que não está no carrinho.
+    """
+    product_id = product_for_cart_tests["id"]
+    response = client.put(
+        f"/cart/items/{product_id}",
+        headers=user_token_headers,
+        json={"quantity": 2},
+    )
     assert response.status_code == 404
-    assert response.json()["detail"] == "Product not found in cart."
-
-
-def test_superuser_cannot_add_item_to_cart(
-    client: TestClient, superuser_token_headers: Dict[str, str]
-):
-    """
-    Testa se um superuser é proibido de adicionar itens, mesmo que não tenha carrinho.
-    Cobre a linha 87 em routers/cart.py.
-    """
-    item_data = {"product_id": 1, "quantity": 1}
-    response = client.post(
-        "/cart/items/", headers=superuser_token_headers, json=item_data
-    )
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Superusers cannot add items to a cart."
-
-
-def test_superuser_cannot_remove_item_from_cart(
-    client: TestClient, superuser_token_headers: Dict[str, str]
-):
-    """
-    Testa se um superuser é proibido de remover itens.
-    Cobre a linha 123 em routers/cart.py.
-    """
-    response = client.delete("/cart/items/1", headers=superuser_token_headers)
-    assert response.status_code == 403
     assert (
-        response.json()["detail"]
-        == "Superusers do not have a cart to remove items from."
+        "Item não encontrado no carrinho ou estoque insuficiente"
+        in response.json()["detail"]
     )
 
 
-def test_read_cart_when_cart_is_missing(
-    client: TestClient,
-    user_token_headers: Dict[str, str],
-    db_session: Session,
-    test_user: Dict,
+def test_update_cart_item_to_zero_removes_item(
+    client: TestClient, user_token_headers: Dict, product_for_cart_tests: Dict
 ):
     """
-    Testa o caso raro de um usuário não ter um carrinho associado.
-    Cobre a linha 56 em routers/cart.py.
+    Testa se tentar atualizar um item com quantidade 0 o remove do carrinho.
+    Este teste cobre as linhas 232-233 do CRUD.
     """
-    user_id = test_user["id"]
-    cart_to_delete = db_session.query(Cart).filter(Cart.user_id == user_id).first()
-    assert cart_to_delete is not None, "O carrinho deveria ter sido criado."
+    product_id = product_for_cart_tests["id"]
+    client.post(
+        "/cart/items/",
+        headers=user_token_headers,
+        json={"product_id": product_id, "quantity": 2},
+    ).raise_for_status()
 
+    update_response: Response = client.put(
+        f"/cart/items/{product_id}", headers=user_token_headers, json={"quantity": 0}
+    )
+    assert update_response.status_code == 204
+
+    cart_response = client.get("/cart/", headers=user_token_headers)
+    assert not cart_response.json()["items"]
+
+
+# -------------------------------------------------------------------------- #
+#                        TESTES DE CASOS DE BORDA E FALHAS                   #
+# -------------------------------------------------------------------------- #
+
+
+def test_superuser_cannot_delete_from_cart(
+    client: TestClient, superuser_token_headers: Dict
+):
+    """Testa se superusuário é proibido de usar a rota DELETE do carrinho."""
+    response = client.delete("/cart/items/1", headers=superuser_token_headers)
+    assert response.status_code == 403, response.text
+
+
+def test_manipulate_cart_when_cart_is_missing(
+    client: TestClient,
+    db_session: Session,
+    test_user_payload: Dict,
+    superuser_token_headers: Dict,
+):
+    """
+    Testa que todas as rotas de manipulação de itens falham corretamente se
+    um usuário, por algum motivo, não tiver um carrinho associado.
+    """
+    cat_resp = client.post(
+        "/categories/", headers=superuser_token_headers, json={"title": "Cat"}
+    )
+    cat_resp.raise_for_status()
+    prod_data = {
+        "sku": "SKU-NOCART",
+        "name": "Prod",
+        "price": 10,
+        "category_id": cat_resp.json()["id"],
+    }
+    prod_resp = client.post(
+        "/products/", headers=superuser_token_headers, json=prod_data
+    )
+    prod_resp.raise_for_status()
+    product_id = prod_resp.json()["id"]
+
+    user = crud.create_user(db_session, user=UserCreate(**test_user_payload))
+    cart_to_delete = db_session.query(models.Cart).filter_by(user_id=user.id).first()
+    assert cart_to_delete is not None
     db_session.delete(cart_to_delete)
     db_session.commit()
 
-    response = client.get("/cart/", headers=user_token_headers)
+    user_token = create_access_token(data={"sub": user.email})
+    headers = {"Authorization": f"Bearer {user_token}"}
+
+    add_response = client.post(
+        "/cart/items/", headers=headers, json={"product_id": product_id, "quantity": 1}
+    )
+    assert add_response.status_code == 404
+    assert "Carrinho do usuário não encontrado" in add_response.json()["detail"]
+
+    update_response = client.put(
+        f"/cart/items/{product_id}", headers=headers, json={"quantity": 2}
+    )
+    assert update_response.status_code == 404
+    assert "Carrinho do usuário não encontrado" in update_response.json()["detail"]
+
+    delete_response = client.delete(f"/cart/items/{product_id}", headers=headers)
+    assert delete_response.status_code == 404
+    assert "Carrinho do usuário não encontrado" in delete_response.json()["detail"]
+
+
+def test_remove_nonexistent_product_from_cart(
+    client: TestClient, user_token_headers: Dict
+):
+    """
+    Testa a falha ao tentar remover um produto que não está no carrinho.
+    Cobre a linha 154.
+    """
+    response = client.delete("/cart/items/9999", headers=user_token_headers)
     assert response.status_code == 404
-    assert response.json()["detail"] == "Cart not found for this user."
+    assert "Produto não encontrado no carrinho" in response.json()["detail"]

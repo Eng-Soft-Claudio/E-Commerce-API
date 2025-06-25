@@ -1,3 +1,4 @@
+alembic
 bcrypt
 fastapi
 httpx
@@ -7,8 +8,11 @@ pydantic-settings
 pytest
 pytest-cov
 pytest-mock
+python-dotenv
 python-jose[cryptography]
 python-multipart
+psycopg2-binary
+requests
 sqlalchemy
 stripe
 uvicorn[standart]

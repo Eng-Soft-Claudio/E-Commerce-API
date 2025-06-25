@@ -5,7 +5,6 @@ Contém toda a lógica para hashing de senhas, criação e verificação
 de tokens JWT, e as dependências do FastAPI para proteger endpoints.
 """
 
-import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -15,14 +14,14 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
-from . import crud, models, schemas
+from . import crud, models
 from .database import get_db
+from .settings import settings
 
 # -------------------------------------------------------------------------- #
 #                         CONFIGURAÇÕES DE SEGURANÇA                         #
 # -------------------------------------------------------------------------- #
 
-SECRET_KEY = secrets.token_urlsafe(32)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -82,7 +81,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     else:
         expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -117,15 +116,14 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
         if email is None:
             raise credentials_exception
-        token_data = schemas.TokenData(email=email)
     except JWTError:
         raise credentials_exception
 
-    user = crud.get_user_by_email(db, email=token_data.email)
+    user = crud.get_user_by_email(db, email=email)
     if user is None:
         raise credentials_exception
     return user

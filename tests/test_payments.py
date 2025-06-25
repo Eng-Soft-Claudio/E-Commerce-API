@@ -5,8 +5,12 @@ Testa os endpoints sob o prefixo '/payments', cobrindo o fluxo de criação
 de sessão de checkout e o processamento de webhooks do Stripe.
 """
 
-import pytest
+# -------------------------------------------------------------------------- #
+#                             IMPORTS NECESSÁRIOS                            #
+# -------------------------------------------------------------------------- #
+
 from fastapi.testclient import TestClient
+import pytest
 from typing import Dict
 from unittest.mock import MagicMock
 
@@ -28,19 +32,26 @@ def order_for_payment(
     cat_resp = client.post(
         "/categories/", headers=superuser_token_headers, json={"title": "Pagamentos"}
     )
+    cat_resp.raise_for_status()
+
     prod_data = {
+        "sku": "PAG-001",
         "name": "Produto para Pagar",
         "price": 123.45,
+        "stock": 10,
         "category_id": cat_resp.json()["id"],
     }
     prod_resp = client.post(
         "/products/", headers=superuser_token_headers, json=prod_data
     )
+    prod_resp.raise_for_status()
+
     client.post(
         "/cart/items/",
         headers=user_token_headers,
         json={"product_id": prod_resp.json()["id"], "quantity": 1},
-    )
+    ).raise_for_status()
+
     order_response = client.post("/orders/", headers=user_token_headers)
     assert order_response.status_code == 201
     return order_response.json()
@@ -52,7 +63,7 @@ def order_for_payment(
 
 
 def test_create_checkout_session_success(
-    client: TestClient, user_token_headers: Dict, order_for_payment: Dict, mocker
+    client: TestClient, order_for_payment: Dict, mocker
 ):
     """Testa o caminho feliz da criação de uma sessão de checkout."""
     order_id = order_for_payment["id"]
@@ -61,64 +72,49 @@ def test_create_checkout_session_success(
         payment_intent="pi_test_12345",
     )
     mocker.patch("stripe.checkout.Session.create", return_value=mock_stripe_session)
-    response = client.post(
-        f"/payments/create-checkout-session/{order_id}", headers=user_token_headers
-    )
+    response = client.post(f"/payments/create-checkout-session/{order_id}")
     assert response.status_code == 200
     assert response.json() == {"checkout_url": mock_stripe_session.url}
 
 
-def test_create_checkout_for_nonexistent_order(
-    client: TestClient, user_token_headers: Dict
-):
-    response = client.post(
-        "/payments/create-checkout-session/9999", headers=user_token_headers
-    )
+def test_create_checkout_for_nonexistent_order(client: TestClient):
+    response = client.post("/payments/create-checkout-session/9999")
     assert response.status_code == 404
 
 
 def test_create_checkout_for_paid_order(
-    client: TestClient,
-    user_token_headers: Dict,
-    order_for_payment: Dict,
-    db_session: Session,
+    client: TestClient, order_for_payment: Dict, db_session: Session
 ):
     order_id = order_for_payment["id"]
     order_in_db = db_session.get(Order, order_id)
     assert order_in_db is not None
     order_in_db.status = "paid"
     db_session.commit()
-    response = client.post(
-        f"/payments/create-checkout-session/{order_id}", headers=user_token_headers
-    )
+    response = client.post(f"/payments/create-checkout-session/{order_id}")
     assert response.status_code == 400
 
 
 def test_create_checkout_session_handles_stripe_error(
-    client: TestClient, user_token_headers: Dict, order_for_payment: Dict, mocker
+    client: TestClient, order_for_payment: Dict, mocker
 ):
     order_id = order_for_payment["id"]
     mocker.patch(
         "stripe.checkout.Session.create", side_effect=stripe.StripeError("API Error")
     )
-    response = client.post(
-        f"/payments/create-checkout-session/{order_id}", headers=user_token_headers
-    )
+    response = client.post(f"/payments/create-checkout-session/{order_id}")
     assert response.status_code == 400
     assert "Stripe error" in response.json()["detail"]
 
 
 def test_create_checkout_session_handles_missing_url(
-    client: TestClient, user_token_headers: Dict, order_for_payment: Dict, mocker
+    client: TestClient, order_for_payment: Dict, mocker
 ):
     order_id = order_for_payment["id"]
     mocker.patch(
         "stripe.checkout.Session.create",
         return_value=MagicMock(url=None, payment_intent="pi_test"),
     )
-    response = client.post(
-        f"/payments/create-checkout-session/{order_id}", headers=user_token_headers
-    )
+    response = client.post(f"/payments/create-checkout-session/{order_id}")
     assert response.status_code == 500
     assert "did not return a checkout URL" in response.json()["detail"]
 

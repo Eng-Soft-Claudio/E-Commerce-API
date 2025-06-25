@@ -1,10 +1,15 @@
 """
 Módulo de Roteamento para o Carrinho de Compras do Usuário.
 
-Define todos os endpoints da API para visualizar e manipular o carrinho de compras
-de um usuário autenticado. Todas as rotas neste módulo exigem um usuário
-logado para serem acessadas.
+Define todos os endpoints da API para visualizar e manipular o carrinho de
+compras de um usuário autenticado. Todas as rotas neste módulo exigem um
+usuário logado para serem acessadas e implementam validações de permissão e
+estoque antes de qualquer operação no banco de dados.
 """
+
+# -------------------------------------------------------------------------- #
+#                             IMPORTS NECESSÁRIOS                            #
+# -------------------------------------------------------------------------- #
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -13,7 +18,7 @@ from .. import auth, crud, models, schemas
 from ..database import get_db
 
 # -------------------------------------------------------------------------- #
-#                                ROUTER SETUP                                #
+#                           ROUTER SETUP                                     #
 # -------------------------------------------------------------------------- #
 
 router = APIRouter(
@@ -30,140 +35,120 @@ router = APIRouter(
 
 @router.get("/", response_model=schemas.Cart)
 def read_my_cart(
-    db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
-    Retorna o carrinho de compras completo do usuário atualmente autenticado.
-
-    Args:
-        db (Session): A sessão do banco de dados, injetada por dependência.
-        current_user (models.User): O usuário logado, obtido a partir do token.
-
-    Raises:
-        HTTPException(404): Se um carrinho não for encontrado para o usuário.
-
-    Returns:
-        schemas.Cart: O objeto do carrinho, incluindo itens e preço total.
+    Retorna o carrinho de compras do usuário. Cria um se não existir.
+    Superusuários são proibidos de acessar esta rota.
     """
     if current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Superusers do not have a shopping cart.",
+            detail="Superusuários não possuem carrinho de compras.",
         )
     cart = crud.get_cart_by_user_id(db, user_id=current_user.id)
     if not cart:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Cart not found for this user.",
-        )
+        cart = models.Cart(owner=current_user)
+        db.add(cart)
+        db.commit()
+        db.refresh(cart)
     return cart
 
 
 @router.post("/items/", response_model=schemas.CartItem)
 def add_product_to_cart(
     item: schemas.CartItemCreate,
-    db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
-    Adiciona um produto ao carrinho do usuário ou atualiza sua quantidade.
-
-    Se o produto já existir no carrinho, a quantidade fornecida é somada
-    à quantidade existente. Caso contrário, um novo item é criado no carrinho.
-
-    Args:
-        item (schemas.CartItemCreate): Dados do item a ser adicionado.
-        db (Session): A sessão do banco de dados.
-        current_user (models.User): O usuário logado.
-
-    Raises:
-        HTTPException(404): Se o produto que está sendo adicionado não existir.
-
-    Returns:
-        schemas.CartItem: O item de carrinho criado ou atualizado.
+    Adiciona um produto ao carrinho ou atualiza sua quantidade.
+    Verifica permissão, existência do produto e estoque disponível.
     """
     if current_user.is_superuser:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Superusers cannot add items to a cart.",
+            detail="Superusuários não podem adicionar itens ao carrinho.",
         )
-
-    cart = current_user.cart
+    cart = crud.get_cart_by_user_id(db, current_user.id)
+    if not cart:
+        raise HTTPException(
+            status_code=404, detail="Carrinho do usuário não encontrado."
+        )
     db_product = crud.get_product(db, product_id=item.product_id)
     if not db_product:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+
+    db_cart_item = crud.add_item_to_cart(db, cart_id=cart.id, item=item)
+    if not db_cart_item:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Estoque insuficiente."
         )
 
-    return crud.add_item_to_cart(db, cart_id=cart.id, item=item)
-
-
-@router.delete("/items/{product_id}", response_model=dict)
-def remove_product_from_cart(
-    product_id: int,
-    db: Session = Depends(get_db),
-    current_user: models.User = Depends(auth.get_current_user),
-):
-    """
-    Remove um produto específico do carrinho do usuário atual.
-
-    Args:
-        product_id (int): O ID do produto a ser removido do carrinho.
-        db (Session): A sessão do banco de dados.
-        current_user (models.User): O usuário logado.
-
-    Raises:
-        HTTPException(404): Se o produto não for encontrado no carrinho do usuário.
-
-    Returns:
-        dict: Uma mensagem de confirmação de sucesso.
-    """
-    if current_user.is_superuser:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Superusers do not have a cart to remove items from.",
-        )
-
-    cart = current_user.cart
-    item_removed = crud.remove_cart_item(db, cart_id=cart.id, product_id=product_id)
-
-    if not item_removed:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found in cart."
-        )
-
-    return {"message": "Item removed from cart successfully."}
+    return db_cart_item
 
 
 @router.put("/items/{product_id}", response_model=schemas.CartItem)
 def update_cart_item(
     product_id: int,
     item_update: schemas.CartItemUpdate,
-    db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
-    Atualiza a quantidade de um item no carrinho do usuário.
+    Atualiza a quantidade de um item específico no carrinho do usuário.
+    Verifica permissão e estoque disponível.
     """
-    cart = current_user.cart
-
-    db_product = crud.get_product(db, product_id=product_id)
-    if not db_product:
+    if current_user.is_superuser:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found."
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superusuários não podem modificar carrinhos.",
         )
+
+    cart = crud.get_cart_by_user_id(db, current_user.id)
+    if not cart:
+        raise HTTPException(
+            status_code=404, detail="Carrinho do usuário não encontrado."
+        )
+
+    if item_update.quantity <= 0:
+        crud.remove_cart_item(db, cart_id=cart.id, product_id=product_id)
+        raise HTTPException(status_code=status.HTTP_204_NO_CONTENT)
 
     updated_item = crud.update_cart_item_quantity(
         db, cart_id=cart.id, product_id=product_id, quantity=item_update.quantity
     )
-
-    if updated_item is None and item_update.quantity <= 0:
-        raise HTTPException(status_code=status.HTTP_204_NO_CONTENT)
-
     if not updated_item:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Item not in cart."
+            status_code=404,
+            detail="Item não encontrado no carrinho ou estoque insuficiente.",
         )
 
     return updated_item
+
+
+@router.delete("/items/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_product_from_cart(
+    product_id: int,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remove um produto específico do carrinho do usuário atual."""
+    if current_user.is_superuser:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superusuários não podem remover itens do carrinho.",
+        )
+
+    cart = crud.get_cart_by_user_id(db, current_user.id)
+    if not cart:
+        raise HTTPException(
+            status_code=404, detail="Carrinho do usuário não encontrado."
+        )
+
+    item_removed = crud.remove_cart_item(db, cart_id=cart.id, product_id=product_id)
+    if not item_removed:
+        raise HTTPException(
+            status_code=404, detail="Produto não encontrado no carrinho."
+        )

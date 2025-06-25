@@ -3,7 +3,8 @@
 # ========================================================================== #
 # Este Dockerfile define os passos para criar uma imagem Docker para a
 # aplicação FastAPI. Ele configura um ambiente Python, instala as
-# dependências, copia o código fonte e define o comando de inicialização.
+# dependências, copia o código fonte e define o comando de inicialização
+# através de um script entrypoint.
 
 # -------------------------------------------------------------------------- #
 #                                IMAGEM BASE                                 #
@@ -22,41 +23,43 @@ FROM python:3.13-slim
 WORKDIR /app
 
 # -------------------------------------------------------------------------- #
-#                      INSTALAÇÃO DE DEPENDÊNCIAS                            #
+#                 INSTALAÇÃO DE DEPENDÊNCIAS DE SISTEMA                      #
 # -------------------------------------------------------------------------- #
-# Copia o arquivo de dependências separadamente para aproveitar o cache de
-# camadas do Docker. Esta etapa só será re-executada se o conteúdo do
-# requirements.txt for alterado.
+# Instala pacotes do sistema operacional necessários, como o cliente do
+# PostgreSQL e o netcat (para o healthcheck no entrypoint).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        sqlite3 \
+        postgresql-client \
+        netcat-openbsd \
         git \
     && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# -------------------------------------------------------------------------- #
+#                   INSTALAÇÃO DE DEPENDÊNCIAS PYTHON                        #
+# -------------------------------------------------------------------------- #
+# Copia o arquivo de dependências separadamente para aproveitar o cache de
+# camadas do Docker.
 COPY requirements.txt .
-RUN pip install setuptools
 RUN pip install --no-cache-dir -r requirements.txt
 
 # -------------------------------------------------------------------------- #
-#                           CÓPIA DO CÓDIGO FONTE                            #
+#                   CÓPIA DO CÓDIGO FONTE E ENTRYPOINT                       #
 # -------------------------------------------------------------------------- #
-# Copia o código fonte da aplicação para dentro do contêiner. Em um
-# ambiente de desenvolvimento, este código será "sobreposto" pelo volume
-# montado no docker-compose.yml, mas é crucial para criar uma imagem
-# autocontida que funcione de forma independente.
+# Copia o código fonte e o script de inicialização para dentro do contêiner.
 COPY ./src ./src
+COPY ./alembic ./alembic
+COPY alembic.ini .
+COPY entrypoint.sh .
+
+# Torna o script entrypoint executável
+RUN chmod +x /app/entrypoint.sh
 
 # -------------------------------------------------------------------------- #
 #                      CONFIGURAÇÃO DE REDE E EXECUÇÃO                       #
 # -------------------------------------------------------------------------- #
-# Expõe a porta em que a aplicação será executada dentro do contêiner,
-# permitindo que o Docker mapeie essa porta para o host.
+# Expõe a porta em que a aplicação será executada.
 EXPOSE 8000
 
-# Define o comando padrão para iniciar a aplicação quando o contêiner for
-# executado.
-# --host 0.0.0.0: Faz o servidor escutar em todas as interfaces de rede,
-#   tornando-o acessível de fora do contêiner.
-# --reload: Ativa o recarregamento automático do servidor ao detectar
-#   alterações nos arquivos, ideal para o desenvolvimento .
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--proxy-headers", "--forwarded-allow-ips", "*"]
+# Define o script de entrypoint que será executado ao iniciar o contêiner.
+ENTRYPOINT ["/app/entrypoint.sh"]

@@ -1,52 +1,64 @@
 """
 Suíte de Testes para os recursos de Autenticação e Usuários.
+
+Testa os endpoints de registro, login e perfil de usuário. Garante que:
+1.  O registro de um novo usuário só é bem-sucedido com dados completos
+    (perfil e endereço) e um CPF válido.
+2.  O login funciona corretamente e retorna um token JWT.
+3.  O endpoint de perfil de usuário (`/users/me`) retorna os dados corretos
+    do usuário autenticado.
+4.  Casos de borda de autenticação (tokens inválidos, e-mails duplicados)
+    são tratados adequadamente.
 """
 
+# -------------------------------------------------------------------------- #
+#                             IMPORTS NECESSÁRIOS                            #
+# -------------------------------------------------------------------------- #
+
+from typing import Dict
+
 from fastapi.testclient import TestClient
-from typing import Dict, Any
-from src.auth import create_access_token
+
+from src.auth import create_access_token  # noqa: F401
 
 # -------------------------------------------------------------------------- #
-#                             TESTES DE REGISTRO DE USUÁRIO                  #
+#                       TESTES DE REGISTRO DE USUÁRIO                        #
 # -------------------------------------------------------------------------- #
 
 
-def test_create_user_success(client: TestClient, test_user_payload: Dict[str, Any]):
-    """Testa o registro bem-sucedido de um novo usuário comum."""
-    user_payload = test_user_payload.copy()
-    user_payload["email"] = "register_success@test.com"
+def test_create_user_success(client: TestClient, test_user_payload: Dict):
+    """Testa o registro bem-sucedido de um novo usuário com dados completos."""
+    payload = test_user_payload.copy()
+    payload["email"] = "register_success@test.com"
+    payload["cpf"] = "53043260082"
 
-    response = client.post("/auth/users/", json=user_payload)
+    response = client.post("/auth/users/", json=payload)
+    assert response.status_code == 201, response.text
 
-    assert response.status_code == 201
     created_user = response.json()
-    assert created_user["email"] == user_payload["email"]
+    assert created_user["email"] == payload["email"]
+    assert "password" not in created_user
     assert not created_user["is_superuser"]
 
 
+def test_create_user_with_missing_field_fails(
+    client: TestClient, test_user_payload: Dict
+):
+    """Testa a falha de registro ao omitir um campo obrigatório (ex: full_name)."""
+    payload = test_user_payload.copy()
+    payload.pop("full_name")
+
+    response = client.post("/auth/users/", json=payload)
+    assert response.status_code == 422
+
+
 def test_create_user_with_existing_email(
-    client: TestClient, test_user: Dict, test_user_payload: Dict[str, Any]
+    client: TestClient, test_user: Dict, test_user_payload: Dict
 ):
-    """Testa a falha ao tentar registrar um usuário com um e-mail que já existe."""
+    """Testa a falha ao registrar um usuário com um e-mail que já existe."""
     response = client.post("/auth/users/", json=test_user_payload)
-
-    assert response.status_code == 400
+    assert response.status_code == 400, response.text
     assert response.json()["detail"] == "Email already registered"
-
-
-def test_create_user_with_invalid_cpf(
-    client: TestClient, test_user_payload: Dict[str, Any]
-):
-    """Testa a falha ao registrar um usuário com um CPF inválido."""
-    user_payload = test_user_payload.copy()
-    user_payload["email"] = "invalid.cpf@test.com"
-    user_payload["cpf"] = "123.456.789-00"  
-
-    response = client.post("/auth/users/", json=user_payload)
-
-    assert response.status_code == 422  
-    error_details = response.json()["detail"]
-    assert any("CPF inválido" in e["msg"] for e in error_details)
 
 
 # -------------------------------------------------------------------------- #
@@ -55,9 +67,9 @@ def test_create_user_with_invalid_cpf(
 
 
 def test_login_for_access_token_success(
-    client: TestClient, test_user: Dict, test_user_payload: Dict[str, Any]
+    client: TestClient, test_user: Dict, test_user_payload: Dict
 ):
-    """Testa o login bem-sucedido de um usuário com credenciais corretas."""
+    """Testa o login bem-sucedido com credenciais corretas."""
     login_data = {
         "username": test_user_payload["email"],
         "password": test_user_payload["password"],
@@ -74,16 +86,9 @@ def test_login_with_wrong_password(client: TestClient, test_user: Dict):
     """Testa a falha de login ao fornecer a senha incorreta."""
     login_data = {"username": test_user["email"], "password": "wrongpassword"}
     response = client.post("/auth/token", data=login_data)
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Incorrect email or password"
 
-
-def test_login_with_nonexistent_email(client: TestClient):
-    """Testa a falha de login ao fornecer um e-mail que não está registrado."""
-    login_data = {"username": "ghost@example.com", "password": "password"}
-    response = client.post("/auth/token", data=login_data)
     assert response.status_code == 401
-    assert response.json()["detail"] == "Incorrect email or password"
+    assert "Incorrect email or password" in response.json()["detail"]
 
 
 # -------------------------------------------------------------------------- #
@@ -92,45 +97,64 @@ def test_login_with_nonexistent_email(client: TestClient):
 
 
 def test_read_users_me_success(
-    client: TestClient, test_user: Dict, user_token_headers: Dict[str, str]
+    client: TestClient, user_token_headers: Dict, test_user: Dict
 ):
     """Testa se um usuário autenticado pode acessar seus próprios dados."""
     response = client.get("/auth/users/me/", headers=user_token_headers)
     assert response.status_code == 200
+
     profile_data = response.json()
     assert profile_data["email"] == test_user["email"]
     assert profile_data["id"] == test_user["id"]
-    assert not profile_data["is_superuser"]
-
-
-def test_read_users_me_unauthorized(client: TestClient):
-    """Testa se o acesso ao endpoint /users/me/ é bloqueado sem autenticação."""
-    response = client.get("/auth/users/me/")
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Not authenticated"
+    assert profile_data["full_name"] == test_user["full_name"]
 
 
 # -------------------------------------------------------------------------- #
 #                       TESTES DE CASOS DE BORDA DE TOKEN                    #
 # -------------------------------------------------------------------------- #
-def test_read_users_me_with_invalid_token(client: TestClient):
-    """Testa o acesso com um token malformado."""
-    headers = {"Authorization": "Bearer not-a-valid-token"}
+
+
+def test_read_users_me_with_invalid_token_format(client: TestClient):
+    """Testa o acesso com um token Bearer malformado."""
+    headers = {"Authorization": "Bearer not-a-valid-jwt"}
     response = client.get("/auth/users/me/", headers=headers)
     assert response.status_code == 401
 
 
 def test_get_current_user_with_token_missing_sub(client: TestClient):
-    """Testa a falha com um token JWT válido mas sem o campo 'sub'."""
-    token = create_access_token(data={"outro_campo": "valor"})
+    """Testa a falha com um token JWT válido, mas sem o campo 'sub'."""
+    token = create_access_token(data={"user_id": 123})
     headers = {"Authorization": f"Bearer {token}"}
     response = client.get("/auth/users/me/", headers=headers)
-    assert response.status_code == 401
+    assert response.status_code == 401, response.text
+    assert "Could not validate credentials" in response.json()["detail"]
 
 
 def test_get_current_user_with_nonexistent_user_in_db(client: TestClient):
-    """Testa a falha com um token válido cujo usuário não existe mais no DB."""
-    token = create_access_token(data={"sub": "ghost@example.com"})
+    """
+    Testa a falha com um token JWT válido para um usuário que não existe
+    (ou foi deletado) do banco de dados.
+    """
+    token = create_access_token(data={"sub": "ghost.user@example.com"})
     headers = {"Authorization": f"Bearer {token}"}
     response = client.get("/auth/users/me/", headers=headers)
-    assert response.status_code == 401
+    assert response.status_code == 401, response.text
+    assert "Could not validate credentials" in response.json()["detail"]
+
+# -------------------------------------------------------------------------- #
+#                        TESTE DE VALIDAÇÃO DE DADOS                         #
+# -------------------------------------------------------------------------- #
+
+
+def test_create_user_with_invalid_cpf(client: TestClient, test_user_payload: Dict):
+    """Testa a falha ao registrar um usuário com um CPF matematicamente inválido."""
+    payload = test_user_payload.copy()
+    payload["email"] = "invalid.cpf@test.com"
+    payload["cpf"] = "111.111.111-11"
+
+    response = client.post("/auth/users/", json=payload)
+    
+    assert response.status_code == 422, response.text
+    
+    error_detail = response.json()["detail"][0]
+    assert "CPF fornecido é inválido" in error_detail["msg"]

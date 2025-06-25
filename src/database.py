@@ -1,17 +1,16 @@
 """
-Módulo de Banco de Dados com Inicialização Segura.
+Módulo de Banco de Dados.
 
-Esta implementação inclui uma lógica de criação de tabelas diretamente na
-dependência get_db, usando uma verificação de estado para garantir que a
-criação ocorra apenas uma vez. Esta abordagem é robusta para o ambiente de
-desenvolvimento com Uvicorn e SQLite. A saída de status é gerenciada
-pelo módulo de logging.
+Esta implementação conecta a aplicação ao banco de dados PostgreSQL
+configurado através das variáveis de ambiente e fornece a dependência
+`get_db` para gerenciar as sessões em cada requisição.
 """
 
 import logging
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-from sqlalchemy.engine import Engine
+
+from .settings import settings
 
 # -------------------------------------------------------------------------- #
 #                       CONFIGURAÇÃO INICIAL E LOGGING                       #
@@ -23,12 +22,7 @@ log = logging.getLogger(__name__)
 #                         CONFIGURAÇÃO DO BANCO DE DADOS                     #
 # -------------------------------------------------------------------------- #
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./minha_api.db"
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
-)
+engine = create_engine(str(settings.DATABASE_URL))
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -36,41 +30,14 @@ Base = declarative_base()
 
 
 # -------------------------------------------------------------------------- #
-#                CRIAÇÃO DE TABELAS E DEPENDÊNCIA GET_DB                     #
+#                         DEPENDÊNCIA GET_DB                                 #
 # -------------------------------------------------------------------------- #
-
-_database_initialized = False
-
-
-def init_db(eng: Engine):
-    """
-    Verifica e cria todas as tabelas no banco de dados, se ainda não tiver
-    sido inicializado nesta sessão.
-    """
-    global _database_initialized
-    if not _database_initialized:
-        log.info("Banco de dados não inicializado. Criando tabelas...")
-        try:
-            from src import models  # noqa: F401
-
-            Base.metadata.create_all(bind=eng)
-            _database_initialized = True
-            log.info("Tabelas criadas com sucesso.")
-        except Exception as e:# pragma: no cover
-            log.error(
-                "Falha catastrófica ao criar tabelas do banco de dados.", exc_info=True
-            )
-            raise e
 
 
 def get_db():
     """
     Dependência do FastAPI que cria e gerencia uma sessão de DB por requisição.
-
-    Também garante que a função de inicialização do DB seja chamada na primeira vez.
     """
-    init_db(engine)
-
     db = SessionLocal()
     try:
         yield db
