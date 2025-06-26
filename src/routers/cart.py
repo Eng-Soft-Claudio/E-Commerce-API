@@ -152,3 +152,44 @@ def remove_product_from_cart(
         raise HTTPException(
             status_code=404, detail="Produto não encontrado no carrinho."
         )
+
+
+# -------------------------------------------------------------------------- #
+#                        COUPON APPLICATION ENDPOINTS                        #
+# -------------------------------------------------------------------------- #
+
+
+@router.post("/apply-coupon", response_model=schemas.Cart)
+def apply_coupon(
+    request: schemas.ApplyCouponRequest,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Aplica um cupom de desconto ao carrinho do usuário."""
+    cart = crud.get_cart_by_user_id(db, user_id=current_user.id)
+    if not cart:
+        raise HTTPException(status_code=404, detail="Carrinho não encontrado.")
+
+    coupon = crud.get_valid_coupon_by_code(db, code=request.code)
+    if not coupon:
+        raise HTTPException(status_code=404, detail="Cupom inválido ou expirado.")
+
+    updated_cart = crud.apply_coupon_to_cart(db, cart, coupon)
+    return updated_cart
+
+
+@router.delete("/apply-coupon", response_model=schemas.Cart)
+def remove_coupon(
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remove o cupom de desconto aplicado ao carrinho do usuário."""
+    cart = crud.get_cart_by_user_id(db, user_id=current_user.id)
+    if not cart:
+        raise HTTPException(status_code=404, detail="Carrinho não encontrado.")
+
+    if not cart.coupon:
+        return cart
+
+    updated_cart = crud.remove_coupon_from_cart(db, cart)
+    return updated_cart

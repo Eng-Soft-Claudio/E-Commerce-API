@@ -25,6 +25,86 @@ from pydantic import (
 from validate_docbr import CPF
 
 # -------------------------------------------------------------------------- #
+#                       SCHEMAS DE CUPOM DE DESCONTO                         #
+# -------------------------------------------------------------------------- #
+
+
+class CouponBase(BaseModel):
+    """Schema base para um cupom de desconto."""
+
+    code: str = Field(..., max_length=20)
+    discount_percent: float = Field(..., gt=0, le=100)
+    expires_at: Optional[datetime] = None
+    is_active: bool = True
+
+
+class CouponCreate(CouponBase):
+    """Schema para a criação de um novo cupom."""
+
+    pass
+
+
+class CouponUpdate(BaseModel):
+    """Schema para atualização parcial de um cupom."""
+
+    code: Optional[str] = Field(None, max_length=20)
+    discount_percent: Optional[float] = Field(None, gt=0, le=100)
+    expires_at: Optional[datetime] = None
+    is_active: Optional[bool] = None
+
+
+class Coupon(CouponBase):
+    """Schema completo para a leitura de um cupom."""
+
+    id: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ApplyCouponRequest(BaseModel):
+    """Schema para o corpo da requisição de aplicação de cupom."""
+
+    code: str
+
+
+# -------------------------------------------------------------------------- #
+#                SCHEMAS DE AVALIAÇÃO E RELACIONADOS A USUÁRIO               #
+# -------------------------------------------------------------------------- #
+
+
+class UserBaseForReview(BaseModel):
+    """
+    Schema simplificado para exibir informações do autor de uma avaliação.
+    Evita expor dados sensíveis do perfil do usuário publicamente.
+    """
+
+    id: int
+    full_name: str
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProductReviewBase(BaseModel):
+    """Schema base com os campos essenciais de uma avaliação de produto."""
+
+    rating: int = Field(..., gt=0, le=5, description="Nota de 1 a 5 estrelas.")
+    comment: Optional[str] = Field(None, max_length=1000)
+
+
+class ProductReviewCreate(ProductReviewBase):
+    """Schema para a criação de uma nova avaliação. Não requer campos adicionais."""
+
+    pass
+
+
+class ProductReview(ProductReviewBase):
+    """Schema de leitura para uma avaliação, incluindo dados do autor."""
+
+    id: int
+    author: UserBaseForReview
+    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+
+# -------------------------------------------------------------------------- #
 #                        SCHEMAS DE PRODUTO E CATEGORIA                      #
 # -------------------------------------------------------------------------- #
 
@@ -79,11 +159,14 @@ class CategoryBase(BaseModel):
 
 
 class Product(ProductBase):
-    """Schema de leitura para um produto, incluindo os dados de sua categoria."""
+    """
+    Schema de leitura para um produto, incluindo dados de sua categoria e suas avaliações.
+    """
 
     id: int
     stock: int
     category: CategoryBase
+    reviews: List[ProductReview] = []
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -135,14 +218,29 @@ class Cart(BaseModel):
 
     id: int
     items: List[CartItem] = []
+    coupon: Optional[Coupon] = None
 
     @computed_field
     @property
-    def total_price(self) -> float:
-        """Calcula o preço total do carrinho, ignorando produtos removidos."""
+    def subtotal(self) -> float:
+        """Calcula o preço total do carrinho (subtotal) sem descontos."""
         return sum(
             item.product.price * item.quantity for item in self.items if item.product
         )
+
+    @computed_field
+    @property
+    def discount_amount(self) -> float:
+        """Calcula o valor do desconto se um cupom estiver aplicado."""
+        if self.coupon:
+            return self.subtotal * (self.coupon.discount_percent / 100)
+        return 0.0
+
+    @computed_field
+    @property
+    def final_price(self) -> float:
+        """Calcula o preço final do carrinho, aplicando o desconto do cupom."""
+        return self.subtotal - self.discount_amount
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -168,6 +266,8 @@ class OrderBase(BaseModel):
     created_at: datetime
     total_price: float
     status: str
+    discount_amount: float
+    coupon_code_used: Optional[str] = None
     items: List[OrderItem] = []
 
 
@@ -243,11 +343,15 @@ class TokenData(BaseModel):
 
     email: Optional[str] = None
 
+
 class ForgotPasswordRequest(BaseModel):
     """Schema para a solicitação de recuperação de senha."""
+
     email: str
+
 
 class ResetPasswordRequest(BaseModel):
     """Schema para a redefinição de senha com o token."""
+
     token: str
     new_password: str = Field(..., min_length=6)

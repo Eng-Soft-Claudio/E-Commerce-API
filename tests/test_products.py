@@ -69,6 +69,7 @@ def test_superuser_product_crud_cycle(
         "price": 5000.0,
         "category_id": category_id,
         "stock": 10,
+        "description": "Um laptop poderoso para profissionais.",
     }
     create_response = client.post(
         "/products/", headers=superuser_token_headers, json=product_data
@@ -102,6 +103,133 @@ def test_superuser_product_crud_cycle(
 
     confirm_response = client.get(f"/products/{product_id}")
     assert confirm_response.status_code == 404
+
+
+# -------------------------------------------------------------------------- #
+#                 TESTES DE BUSCA E FILTRAGEM DE PRODUTOS                    #
+# -------------------------------------------------------------------------- #
+
+
+def test_search_and_filter_products_functionality(
+    client: TestClient, superuser_token_headers: Dict
+):
+    """
+    Testa a funcionalidade de busca e filtro de produtos de forma abrangente.
+    Cria produtos em diferentes categorias com nomes e descrições distintos
+    para validar os vários cenários de busca.
+    """
+    cat_a_id = create_category_and_get_id(
+        client, superuser_token_headers, title="Roupas"
+    )
+    cat_b_id = create_category_and_get_id(
+        client, superuser_token_headers, title="Calçados"
+    )
+
+    client.post(
+        "/products/",
+        headers=superuser_token_headers,
+        json={
+            "name": "Camisa de Algodão",
+            "sku": "CA-001",
+            "price": 80,
+            "category_id": cat_a_id,
+            "description": "Tecido macio e confortável.",
+        },
+    ).raise_for_status()
+    client.post(
+        "/products/",
+        headers=superuser_token_headers,
+        json={
+            "name": "Calça Jeans",
+            "sku": "CJ-002",
+            "price": 150,
+            "category_id": cat_a_id,
+            "description": "Jeans de alta durabilidade.",
+        },
+    ).raise_for_status()
+    client.post(
+        "/products/",
+        headers=superuser_token_headers,
+        json={
+            "name": "Tênis de Corrida",
+            "sku": "TC-003",
+            "price": 350,
+            "category_id": cat_b_id,
+            "description": "Ideal para atletas de jeans.",
+        },
+    ).raise_for_status()
+
+    response = client.get("/products/?q=camisa de algodão")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["sku"] == "CA-001"
+
+    response = client.get("/products/?q=Calça")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["sku"] == "CJ-002"
+
+    response = client.get("/products/?q=atletas")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["sku"] == "TC-003"
+
+    response = client.get("/products/?q=jeans")
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+    skus_found = {p["sku"] for p in response.json()}
+    assert skus_found == {"CJ-002", "TC-003"}
+
+    response = client.get(f"/products/?q=jeans&category_id={cat_a_id}")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["sku"] == "CJ-002"
+
+    response = client.get("/products/?q=produto-fantasma-xyz")
+    assert response.status_code == 200
+    assert len(response.json()) == 0
+
+
+def test_read_products_filtered_by_category(
+    client: TestClient, superuser_token_headers: Dict
+):
+    """Testa se a listagem de produtos com o filtro de categoria funciona."""
+    cat_a_id = create_category_and_get_id(
+        client, superuser_token_headers, title="Cat A"
+    )
+    cat_b_id = create_category_and_get_id(
+        client, superuser_token_headers, title="Cat B"
+    )
+
+    client.post(
+        "/products/",
+        headers=superuser_token_headers,
+        json={
+            "name": "Produto A",
+            "sku": "PROD-A",
+            "price": 10,
+            "category_id": cat_a_id,
+        },
+    ).raise_for_status()
+
+    client.post(
+        "/products/",
+        headers=superuser_token_headers,
+        json={
+            "name": "Produto B",
+            "sku": "PROD-B",
+            "price": 20,
+            "category_id": cat_b_id,
+        },
+    ).raise_for_status()
+
+    response = client.get(f"/products/?category_id={cat_a_id}")
+    assert response.status_code == 200
+
+    products = response.json()
+    assert len(products) == 1
+    assert products[0]["name"] == "Produto A"
+    assert products[0]["category"]["id"] == cat_a_id
 
 
 # -------------------------------------------------------------------------- #
@@ -145,7 +273,9 @@ def test_update_product_with_duplicate_sku(
         "price": 50,
         "category_id": category_id,
     }
-    client.post("/products/", headers=superuser_token_headers, json=prod1_data)
+    client.post(
+        "/products/", headers=superuser_token_headers, json=prod1_data
+    ).raise_for_status()
     prod2_data = {
         "name": "Chave de Fenda",
         "sku": "FER-002",
@@ -163,11 +293,6 @@ def test_update_product_with_duplicate_sku(
     )
     assert update_response.status_code == 400
     assert "SKU já pertence a outro produto" in update_response.json()["detail"]
-
-
-# -------------------------------------------------------------------------- #
-#                        TESTES DE CASOS DE BORDA                            #
-# -------------------------------------------------------------------------- #
 
 
 def test_create_product_with_nonexistent_category(
@@ -231,45 +356,3 @@ def test_delete_nonexistent_product(client: TestClient, superuser_token_headers:
     response = client.delete("/products/9999", headers=superuser_token_headers)
     assert response.status_code == 404
     assert "Produto não encontrado" in response.json()["detail"]
-
-
-def test_read_products_filtered_by_category(
-    client: TestClient, superuser_token_headers: Dict
-):
-    """Testa se a listagem de produtos com o filtro de categoria funciona."""
-    cat_a_id = create_category_and_get_id(
-        client, superuser_token_headers, title="Cat A"
-    )
-    cat_b_id = create_category_and_get_id(
-        client, superuser_token_headers, title="Cat B"
-    )
-
-    client.post(
-        "/products/",
-        headers=superuser_token_headers,
-        json={
-            "name": "Produto A",
-            "sku": "PROD-A",
-            "price": 10,
-            "category_id": cat_a_id,
-        },
-    ).raise_for_status()
-
-    client.post(
-        "/products/",
-        headers=superuser_token_headers,
-        json={
-            "name": "Produto B",
-            "sku": "PROD-B",
-            "price": 20,
-            "category_id": cat_b_id,
-        },
-    ).raise_for_status()
-
-    response = client.get(f"/products/?category_id={cat_a_id}")
-    assert response.status_code == 200
-
-    products = response.json()
-    assert len(products) == 1
-    assert products[0]["name"] == "Produto A"
-    assert products[0]["category"]["id"] == cat_a_id

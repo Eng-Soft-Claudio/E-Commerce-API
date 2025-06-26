@@ -14,7 +14,7 @@ duplicado, é implementada aqui.
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from .. import auth, crud, schemas
@@ -124,15 +124,20 @@ def read_products_endpoint(
     skip: int = 0,
     limit: int = 100,
     category_id: Optional[int] = None,
+    q: Optional[str] = Query(None, description="Termo de busca para nome ou descrição"),
     db: Session = Depends(get_db),
 ):
     """
     [Público] Lista todos os produtos disponíveis no catálogo.
 
-    Permite paginação com `skip` e `limit`, e pode ser filtrado por um
-    `category_id` para listar produtos de uma categoria específica.
+    Permite:
+    - Paginação com `skip` e `limit`.
+    - Filtragem por `category_id` para produtos de uma categoria específica.
+    - Busca por um termo `q` no nome ou descrição dos produtos.
     """
-    products = crud.get_products(db, skip=skip, limit=limit, category_id=category_id)
+    products = crud.get_products(
+        db, skip=skip, limit=limit, category_id=category_id, q=q
+    )
     return products
 
 

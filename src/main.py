@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from .database import engine, Base
+from .database import engine, Base  # noqa: F401
 
 # -------------------------------------------------------------------------- #
 #                        IMPORTS DOS MÓDULOS DE ROTAS                        #
@@ -21,10 +21,12 @@ from .database import engine, Base
 from .routers import auth
 from .routers import cart
 from .routers import categories
+from .routers import coupons
 from .routers import dashboard
 from .routers import orders
 from .routers import payments
 from .routers import products
+from .routers import reviews
 from .routers import users
 
 
@@ -37,7 +39,7 @@ async def lifespan(app: FastAPI):
     Context manager para o ciclo de vida da aplicação.
     Garante que as tabelas do banco de dados sejam criadas na inicialização.
     """
-    Base.metadata.create_all(bind=engine)
+    # Base.metadata.create_all(bind=engine) # Desativado em favor do Alembic
     yield
 
 
@@ -66,7 +68,9 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(categories.router)
 app.include_router(products.router)
+app.include_router(reviews.router)
 app.include_router(cart.router)
+app.include_router(coupons.router)
 app.include_router(orders.router)
 app.include_router(payments.router)
 app.include_router(users.router)

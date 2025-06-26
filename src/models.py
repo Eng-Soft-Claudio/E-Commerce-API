@@ -19,6 +19,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -72,7 +73,11 @@ class Product(Base):
         Integer, default=0, server_default="0", nullable=False
     )
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
+
     category: Mapped["Category"] = relationship(back_populates="products")
+    reviews: Mapped[List["ProductReview"]] = relationship(
+        back_populates="product", cascade="all, delete-orphan"
+    )
 
 
 # -------------------------------------------------------------------------- #
@@ -108,6 +113,9 @@ class User(Base):
         back_populates="owner", cascade="all, delete-orphan"
     )
     orders: Mapped[List["Order"]] = relationship(back_populates="customer")
+    reviews: Mapped[List["ProductReview"]] = relationship(
+        back_populates="author", cascade="all, delete-orphan"
+    )
 
 
 # -------------------------------------------------------------------------- #
@@ -119,16 +127,19 @@ class Cart(Base):
     """
     Modelo para o carrinho de compras, ligado um-para-um com um usuário.
     Atua como um contêiner para os itens que o usuário pretende comprar.
+    Pode ter um cupom de desconto associado.
     """
 
     __tablename__ = "carts"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    coupon_id: Mapped[Optional[int]] = mapped_column(ForeignKey("coupons.id"))
 
     owner: Mapped["User"] = relationship(back_populates="cart")
     items: Mapped[List["CartItem"]] = relationship(
         back_populates="cart", cascade="all, delete-orphan"
     )
+    coupon: Mapped[Optional["Coupon"]] = relationship()
 
 
 class CartItem(Base):
@@ -155,14 +166,19 @@ class CartItem(Base):
 class Order(Base):
     """
     Modelo para um pedido, representando uma compra.
-    Contém o snapshot de uma transação, incluindo preço total e status.
+    Contém o snapshot de uma transação, incluindo preço total, desconto
+    aplicado e status.
     """
 
     __tablename__ = "orders"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
     total_price: Mapped[float] = mapped_column(Float)
+    discount_amount: Mapped[float] = mapped_column(Float, default=0.0)
+    coupon_code_used: Mapped[Optional[str]] = mapped_column(String)
     status: Mapped[str] = mapped_column(String, default="pending_payment")
     payment_intent_id: Mapped[Optional[str]] = mapped_column(
         String, unique=True, index=True
@@ -186,6 +202,55 @@ class OrderItem(Base):
     price_at_purchase: Mapped[float] = mapped_column(Float)
 
     product: Mapped[Optional["Product"]] = relationship()
+
+
+# -------------------------------------------------------------------------- #
+#                     MODELO DE AVALIAÇÃO DE PRODUTO                         #
+# -------------------------------------------------------------------------- #
+
+
+class ProductReview(Base):
+    """
+    Modelo para armazenar la avaliação (review) de um produto por um usuário.
+    Cada usuário pode avaliar um produto apenas uma vez.
+    """
+
+    __tablename__ = "product_reviews"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    product: Mapped["Product"] = relationship(back_populates="reviews")
+    author: Mapped["User"] = relationship(back_populates="reviews")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "product_id", name="uq_user_product_review"),
+    )
+
+
+# -------------------------------------------------------------------------- #
+#                        MODELO DE CUPOM DE DESCONTO                         #
+# -------------------------------------------------------------------------- #
+
+
+class Coupon(Base):
+    """
+    Modelo para armazenar cupons de desconto.
+    """
+
+    __tablename__ = "coupons"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    code: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
+    discount_percent: Mapped[float] = mapped_column(Float, nullable=False)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
 
 # -------------------------------------------------------------------------- #
