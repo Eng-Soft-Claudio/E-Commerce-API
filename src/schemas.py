@@ -374,3 +374,15 @@ class ResetPasswordRequest(BaseModel):
 
     token: str
     new_password: str = Field(..., min_length=6)
+
+
+class UpdatePasswordRequest(BaseModel):
+    """
+    Schema para a atualização de senha de um usuário autenticado.
+
+    Exige a senha atual para verificação de segurança, juntamente com
+    a nova senha desejada.
+    """
+
+    current_password: str
+    new_password: str = Field(..., min_length=6)

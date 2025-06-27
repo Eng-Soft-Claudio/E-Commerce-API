@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from src import auth, crud, models, schemas
+from .. import auth, crud, models, schemas
 from ..database import get_db
 
 # -------------------------------------------------------------------------- #
@@ -172,3 +172,39 @@ def update_user_me(
         db=db, user=current_user, user_data=user_data
     )
     return updated_user
+
+
+@router.put("/users/me/password", status_code=status.HTTP_200_OK)
+def update_user_password_me(
+    request: schemas.UpdatePasswordRequest,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Atualiza a senha do usuário atualmente logado.
+
+    Este endpoint requer que o usuário forneça sua senha atual por motivos de
+    segurança. Se a senha atual estiver correta, a nova senha será hasheada
+    e salva no banco de dados.
+
+    Args:
+        request (schemas.UpdatePasswordRequest): Corpo da requisição com a
+                                                 senha atual e a nova senha.
+        current_user (models.User): O usuário logado, injetado pela dependência.
+        db (Session): A sessão do banco de dados.
+
+    Raises:
+        HTTPException(400): Se a senha atual fornecida estiver incorreta.
+
+    Returns:
+        dict: Uma mensagem confirmando que a senha foi atualizada com sucesso.
+    """
+    if not auth.verify_password(request.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Incorrect current password.",
+        )
+
+    crud.update_user_password(db, user=current_user, new_password=request.new_password)
+
+    return {"message": "Password updated successfully."}
