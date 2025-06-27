@@ -18,7 +18,7 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from . import auth, models, schemas
+from src import auth, models, schemas
 
 # -------------------------------------------------------------------------- #
 #                         CRUD FUNCTIONS - CATEGORY                          #
@@ -111,6 +111,37 @@ def get_all_users(db: Session, skip: int = 0, limit: int = 100) -> list[models.U
         .limit(limit)
         .all()
     )
+
+
+def update_user_profile(
+    db: Session, user: models.User, user_data: schemas.UserUpdate
+) -> models.User:
+    """
+    Atualiza os dados de perfil de um usuário existente.
+
+    Esta função recebe o objeto do usuário logado e os dados do schema de
+    atualização. Ela itera sobre os dados fornecidos e atualiza apenas os
+    campos que foram explicitamente enviados na requisição, ignorando
+    valores `None`.
+
+    Args:
+        db (Session): A sessão do banco de dados para a transação.
+        user (models.User): O objeto ORM do usuário a ser atualizado.
+        user_data (schemas.UserUpdate): O schema Pydantic contendo os dados
+                                        parciais de atualização.
+
+    Returns:
+        models.User: O objeto ORM do usuário com os dados atualizados.
+    """
+    update_data = user_data.model_dump(exclude_unset=True)
+
+    for key, value in update_data.items():
+        setattr(user, key, value)
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 # -------------------------------------------------------------------------- #

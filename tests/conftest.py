@@ -3,21 +3,41 @@ Arquivo de Configuração Central do Pytest (Conftest).
 
 Este arquivo define fixtures essenciais utilizadas em toda a suíte de testes.
 Ele é responsável por:
-1.  Configurar um banco de dados de teste isolado em memória (SQLite) para
+1.  Configurar um ambiente de teste com variáveis de ambiente 'dummy'
+    para satisfazer o módulo de configurações da aplicação (`src/settings.py`)
+    durante a inicialização do pytest. Isso é feito no nível do módulo, ANTES
+    de qualquer importação de `src`.
+2.  Configurar um banco de dados de teste isolado em memória (SQLite) para
     cada função de teste, garantindo que os testes não interfiram uns com os
     outros.
-2.  Criar um cliente de teste da aplicação FastAPI (`TestClient`) com a
+3.  Criar um cliente de teste da aplicação FastAPI (`TestClient`) com a
     dependência de banco de dados sobrescrita para usar o banco de teste.
-3.  Fornecer 'payloads' de dados (dicionários) para a criação de usuários
+4.  Fornecer 'payloads' de dados (dicionários) para a criação de usuários
     comuns e superusuários, incluindo todos os campos de perfil obrigatórios.
-4.  Criar usuários (comum e superusuário) e gerar tokens de autenticação
+5.  Criar usuários (comum e superusuário) e gerar tokens de autenticação
     para serem usados em testes de endpoints protegidos. A fixture de criação
     de usuário é idempotente para evitar falhas em execuções repetidas.
 """
 
 # -------------------------------------------------------------------------- #
-#                             IMPORTS NECESSÁRIOS                            #
+#                 SETUP DE AMBIENTE E IMPORTS NECESSÁRIOS                    #
 # -------------------------------------------------------------------------- #
+
+import os
+
+# DEFINE AS VARIÁVEIS DE AMBIENTE ANTES DE QUALQUER IMPORT DE 'SRC'
+# Isso garante que o módulo `src.settings` possa ser carregado sem erros
+# durante a coleta de testes do pytest.
+os.environ["POSTGRES_USER"] = "test_user"
+os.environ["POSTGRES_PASSWORD"] = "test_password"
+os.environ["POSTGRES_SERVER"] = "test_db_server"
+os.environ["POSTGRES_PORT"] = "5433"
+os.environ["POSTGRES_DB"] = "test_db_name"
+os.environ["JWT_SECRET_KEY"] = "test_jwt_secret_key_that_is_long_enough"
+os.environ["STRIPE_SECRET_KEY"] = "sk_test_dummy_key_for_testing"
+os.environ["STRIPE_WEBHOOK_SECRET"] = "whsec_test_dummy_webhook_secret_for_testing"
+os.environ["CLIENT_URL"] = "http://testfrontend"
+
 
 import pytest
 from typing import Dict, Generator
@@ -26,7 +46,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import StaticPool, create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from src import crud, models, schemas  
+from src import crud, models, schemas
 from src.auth import create_access_token
 from src.database import Base, get_db
 from src.main import app as main_app
@@ -162,7 +182,7 @@ def test_user(client: TestClient, test_user_payload: Dict, db_session: Session) 
         return schemas.User.model_validate(user).model_dump()
 
     response.raise_for_status()
-    return {}  
+    return {}
 
 
 @pytest.fixture(scope="function")

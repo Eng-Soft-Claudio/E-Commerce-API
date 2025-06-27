@@ -1,8 +1,9 @@
 """
 Módulo de Roteamento para Autenticação e Gerenciamento de Usuários.
 
-Define os endpoints públicos para registro de novos usuários e para
-obtenção de tokens de acesso (login).
+Define os endpoints públicos para registro de novos usuários, para
+obtenção de tokens de acesso (login) e os endpoints para que um usuário
+autenticado gerencie seu próprio perfil.
 """
 
 from datetime import timedelta
@@ -11,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
-from .. import auth, crud, schemas, models
+from src import auth, crud, models, schemas
 from ..database import get_db
 
 # -------------------------------------------------------------------------- #
@@ -103,7 +104,7 @@ def forgot_password(
         print(f"Password reset token for {user.email}: {reset_token}")
         return {
             "detail": "If an account with this email exists, a password reset link has been sent.",
-            "token": reset_token, 
+            "token": reset_token,
         }
 
     return {
@@ -144,3 +145,30 @@ async def read_users_me(current_user: models.User = Depends(auth.get_current_use
     as informações do usuário que fez a requisição.
     """
     return current_user
+
+
+@router.put("/users/me/", response_model=schemas.User)
+def update_user_me(
+    user_data: schemas.UserUpdate,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Atualiza os dados de perfil do usuário atualmente logado.
+
+    Recebe os dados parciais no corpo da requisição e atualiza apenas os
+    campos fornecidos. Garante que um usuário só pode modificar o próprio
+    perfil.
+
+    Args:
+        user_data (schemas.UserUpdate): Os dados a serem atualizados.
+        current_user (models.User): O usuário logado, injetado pela dependência.
+        db (Session): A sessão do banco de dados.
+
+    Returns:
+        schemas.User: Os dados atualizados do usuário.
+    """
+    updated_user = crud.update_user_profile(
+        db=db, user=current_user, user_data=user_data
+    )
+    return updated_user

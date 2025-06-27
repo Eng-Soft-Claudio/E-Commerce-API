@@ -315,6 +315,25 @@ class UserCreate(UserBase):
     password: str = Field(..., min_length=6)
 
 
+class UserUpdate(BaseModel):
+    """
+    Schema para a atualização de dados de perfil de um usuário.
+
+    Todos os campos são opcionais, permitindo que o usuário envie apenas os
+    dados que deseja modificar. O e-mail e o CPF não podem ser alterados
+    por esta rota para manter a integridade da identificação do usuário.
+    """
+
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    address_street: Optional[str] = None
+    address_number: Optional[str] = None
+    address_complement: Optional[str] = None
+    address_zip: Optional[str] = None
+    address_city: Optional[str] = None
+    address_state: Optional[str] = None
+
+
 class User(UserBase):
     """Schema de leitura para um usuário, incluindo ID e status de superuser."""
 

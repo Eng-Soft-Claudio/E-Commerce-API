@@ -4,15 +4,21 @@ Módulo para gerenciar configurações da aplicação a partir de variáveis de 
 Esta implementação usa pathlib para construir um caminho absoluto para o arquivo .env,
 resolvendo problemas de análise estática e garantindo que o arquivo seja
 encontrado independentemente do diretório de trabalho atual.
+
+Para interoperabilidade com o Pytest, o módulo detecta se está sendo executado
+no contexto de teste (`"pytest" in sys.modules`). Se estiver, ele ignora a
+leitura do arquivo .env e depende exclusivamente das variáveis de ambiente,
+que são fornecidas pelo `conftest.py`.
 """
 
 # -------------------------------------------------------------------------- #
 #                             IMPORTS NECESSÁRIOS                            #
 # -------------------------------------------------------------------------- #
+import sys
 from pathlib import Path
-from pydantic import Field, ValidationError, PostgresDsn, computed_field
+from typing import Dict, Any, Optional  # noqa: F401
+from pydantic import Field, PostgresDsn, computed_field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional  # noqa: F401
 
 # -------------------------------------------------------------------------- #
 #                         CONFIGURAÇÃO DE CAMINHOS                           #
@@ -27,7 +33,7 @@ ENV_FILE_PATH = ROOT_DIR / ".env"
 
 class Settings(BaseSettings):
     """
-    Carrega as configurações a partir do caminho absoluto do .env ou do ambiente.
+    Carrega as configurações a partir do .env, do ambiente ou de ambos.
     Valida a presença de chaves essenciais para o funcionamento da aplicação.
     """
 
@@ -54,9 +60,16 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = Field(...)
     CLIENT_URL: str = "http://localhost:3000"
 
-    model_config = SettingsConfigDict(
-        env_file=str(ENV_FILE_PATH), env_file_encoding="utf-8"
-    )
+    # --- Lógica de configuração dinâmica para teste vs. produção ---
+    # Cria um dicionário base para a configuração.
+    _config_dict: Dict[str, Any] = {"env_file_encoding": "utf-8", "extra": "ignore"}
+
+    # Se não estivermos em modo de teste, instrui o Pydantic a carregar o .env.
+    if "pytest" not in sys.modules:
+        _config_dict["env_file"] = str(ENV_FILE_PATH)
+
+    # Aplica o dicionário de configuração ao modelo.
+    model_config = SettingsConfigDict(**_config_dict)
 
 
 # -------------------------------------------------------------------------- #
@@ -69,10 +82,13 @@ def load_settings() -> Settings:
     Carrega e valida as configurações. Levanta um erro em caso de falha.
     """
     try:
+        # Passar um dicionário vazio para model_validate força a reavaliação
+        # com base no que está no ambiente e no .env (se aplicável).
         return Settings.model_validate({})
     except ValidationError as e:
         raise RuntimeError(
-            "Verifique se o arquivo .env existe e contém as variáveis necessárias."
+            "Verifique se o arquivo .env existe e contém as variáveis necessárias, "
+            "ou se as variáveis de ambiente estão configuradas corretamente para o teste."
         ) from e
 
 

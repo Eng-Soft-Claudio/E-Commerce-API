@@ -1,0 +1,18 @@
+Funcionalidade de busca de produtos. - CONCLUÍDO
+Sistema de avaliações e comentários para produtos (reviews). - CONCLUÍDO
+Implementação de cupons de desconto e promoções. - CONCLUÍDO
+Lógica de frete com cálculo de custos e inserção de código de rastreio.
+Envio de e-mails transacionais (confirmação de pedido, envio, etc.).
+Dashboard de administração com relatórios de vendas avançados.
+Inclusão de metadados de paginação nas respostas da API (total de itens, total de páginas).
+Implementação de Rate Limiting para endpoints de autenticação.
+Galeria de múltiplas imagens por produto.
+Execução de tarefas em background/assíncronas (ex: envio de e-mails).
+Funcionalidade de "Lista de Desejos" (Wishlist) para usuários.
+Camada de cache (ex: com Redis) para endpoints de listagem.
+Opções de ordenação e filtros avançados para a listagem de produtos.
+Gerenciamento de perfil pelo próprio usuário (alterar endereço, senha).
+Notificações de baixo estoque para administradores.
+Utilização de Enums para campos de status (ex: Order.status).
+Versionamento da API (ex: /api/v1/...).
+Gestão de usuários pelo painel de administrador (editar, desativar).
