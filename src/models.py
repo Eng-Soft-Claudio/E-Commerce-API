@@ -90,6 +90,7 @@ class User(Base):
     Modelo SQLAlchemy representando a tabela 'users' no banco de dados.
     Armazena dados de autenticação e informações pessoais de clientes e admins,
     com todos os campos de perfil sendo obrigatórios para garantir rastreabilidade.
+    Inclui um status `is_active` para desativação lógica de contas.
     """
 
     __tablename__ = "users"
@@ -98,6 +99,9 @@ class User(Base):
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String)
     is_superuser: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False, server_default="true"
+    )
 
     full_name: Mapped[str] = mapped_column(String)
     cpf: Mapped[str] = mapped_column(String(14), unique=True, index=True)
@@ -226,8 +230,8 @@ class ProductReview(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    product: Mapped["Product"] = relationship(back_populates="reviews")
     author: Mapped["User"] = relationship(back_populates="reviews")
+    product: Mapped["Product"] = relationship(back_populates="reviews")
 
     __table_args__ = (
         UniqueConstraint("user_id", "product_id", name="uq_user_product_review"),

@@ -334,11 +334,24 @@ class UserUpdate(BaseModel):
     address_state: Optional[str] = None
 
 
+class AdminUserUpdate(UserUpdate):
+    """
+    Schema para a atualização de um usuário por um administrador.
+
+    Herda de `UserUpdate` e adiciona a capacidade de modificar o status de
+    `is_active` e `is_superuser`.
+    """
+
+    is_active: Optional[bool] = None
+    is_superuser: Optional[bool] = None
+
+
 class User(UserBase):
-    """Schema de leitura para um usuário, incluindo ID e status de superuser."""
+    """Schema de leitura para um usuário, incluindo ID e status de superuser e ativo."""
 
     id: int
     is_superuser: bool
+    is_active: bool
     orders: List[Order] = []
 
     model_config = ConfigDict(from_attributes=True)

@@ -18,7 +18,7 @@ from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from src import auth, models, schemas
+from . import auth, models, schemas
 
 # -------------------------------------------------------------------------- #
 #                         CRUD FUNCTIONS - CATEGORY                          #
@@ -73,6 +73,11 @@ def delete_category(db: Session, category_id: int) -> Optional[models.Category]:
 # -------------------------------------------------------------------------- #
 #                          CRUD FUNCTIONS - USERS                            #
 # -------------------------------------------------------------------------- #
+
+
+def get_user_by_id(db: Session, user_id: int) -> Optional[models.User]:
+    """[Admin] Busca um único usuário pelo seu ID."""
+    return db.query(models.User).filter(models.User.id == user_id).first()
 
 
 def get_user_by_email(db: Session, email: str) -> Optional[models.User]:
@@ -142,6 +147,59 @@ def update_user_profile(
     db.commit()
     db.refresh(user)
     return user
+
+
+def update_user_by_admin(
+    db: Session, user_id: int, user_data: schemas.AdminUserUpdate
+) -> Optional[models.User]:
+    """
+    [Admin] Atualiza os dados de um usuário pelo seu ID.
+
+    Esta função, acessível apenas por administradores, busca um usuário pelo
+    seu ID e atualiza os campos fornecidos no schema `AdminUserUpdate`.
+    Permite a modificação de campos críticos como `is_active` e `is_superuser`.
+
+    Args:
+        db (Session): A sessão do banco de dados para a transação.
+        user_id (int): O ID do usuário a ser atualizado.
+        user_data (schemas.AdminUserUpdate): O schema Pydantic com os dados
+                                             parciais a serem atualizados.
+
+    Returns:
+        Optional[models.User]: O objeto ORM do usuário atualizado, ou None se
+                               o usuário não for encontrado.
+    """
+    db_user = get_user_by_id(db, user_id)
+    if not db_user:
+        return None
+
+    update_data = user_data.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_user, key, value)
+
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+
+def delete_user(db: Session, user_id: int) -> Optional[models.User]:
+    """
+    [Admin] Deleta permanentemente um usuário do banco de dados.
+
+    Args:
+        db (Session): A sessão do banco de dados para a transação.
+        user_id (int): O ID do usuário a ser deletado.
+
+    Returns:
+        Optional[models.User]: O objeto do usuário que foi deletado, ou None
+                               se o usuário não for encontrado.
+    """
+    db_user = get_user_by_id(db, user_id)
+    if db_user:
+        db.delete(db_user)
+        db.commit()
+    return db_user
 
 
 # -------------------------------------------------------------------------- #
