@@ -30,4 +30,4 @@ def test_read_main():
     """
     response = client.get("/")
     assert response.status_code == 200
-    assert response.json() == {"message": "API do E-commerce Louva-Deus está online."}
+    assert response.json() == {"message": "API do E-commerce está online."}
