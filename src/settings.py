@@ -56,19 +56,19 @@ class Settings(BaseSettings):
         )
 
     JWT_SECRET_KEY: str = Field(...)
+
     STRIPE_SECRET_KEY: str = Field(...)
     STRIPE_WEBHOOK_SECRET: str = Field(...)
     CLIENT_URL: str = "http://localhost:3000"
 
-    # --- Lógica de configuração dinâmica para teste vs. produção ---
-    # Cria um dicionário base para a configuração.
+    MELHOR_ENVIO_TOKEN: str = Field(...)
+    STORE_ORIGIN_CEP: str = Field(..., pattern=r"^\d{8}$")
+
     _config_dict: Dict[str, Any] = {"env_file_encoding": "utf-8", "extra": "ignore"}
 
-    # Se não estivermos em modo de teste, instrui o Pydantic a carregar o .env.
     if "pytest" not in sys.modules:
         _config_dict["env_file"] = str(ENV_FILE_PATH)
 
-    # Aplica o dicionário de configuração ao modelo.
     model_config = SettingsConfigDict(**_config_dict)
 
 
@@ -82,8 +82,6 @@ def load_settings() -> Settings:
     Carrega e valida as configurações. Levanta um erro em caso de falha.
     """
     try:
-        # Passar um dicionário vazio para model_validate força a reavaliação
-        # com base no que está no ambiente e no .env (se aplicável).
         return Settings.model_validate({})
     except ValidationError as e:
         raise RuntimeError(

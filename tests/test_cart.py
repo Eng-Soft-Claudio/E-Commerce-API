@@ -44,6 +44,10 @@ def product_for_cart_tests(client: TestClient, superuser_token_headers: Dict) ->
         "price": 10.99,
         "category_id": cat_resp.json()["id"],
         "stock": 5,
+        "weight_kg": 0.2,
+        "height_cm": 5,
+        "width_cm": 10,
+        "length_cm": 15,
     }
     prod_resp = client.post(
         "/products/", headers=superuser_token_headers, json=prod_data
@@ -279,6 +283,10 @@ def test_manipulate_cart_when_cart_is_missing(
         "name": "Prod",
         "price": 10,
         "category_id": cat_resp.json()["id"],
+        "weight_kg": 0.1,
+        "height_cm": 1,
+        "width_cm": 1,
+        "length_cm": 1,
     }
     prod_resp = client.post(
         "/products/", headers=superuser_token_headers, json=prod_data

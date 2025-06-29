@@ -34,6 +34,10 @@ def product_for_review(
         "price": 50.0,
         "category_id": cat_resp.json()["id"],
         "stock": 100,
+        "weight_kg": 0.1,
+        "height_cm": 2,
+        "width_cm": 10,
+        "length_cm": 15,
     }
     prod_resp = client.post(
         "/products/", headers=superuser_token_headers, json=prod_data

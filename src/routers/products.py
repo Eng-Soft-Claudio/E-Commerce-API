@@ -49,7 +49,8 @@ def create_product_endpoint(
 
     Requer privilégios de administrador. Antes da criação, verifica se a
     categoria fornecida existe e se o SKU (Stock Keeping Unit) já não está
-    em uso por outro produto.
+    em uso por outro produto. Recebe e armazena os dados logísticos
+    (peso e dimensões) do produto.
     """
     db_category = crud.get_category(db, category_id=product.category_id)
     if not db_category:
@@ -74,8 +75,8 @@ def update_product_endpoint(
     [Admin] Atualiza um produto existente.
 
     Requer privilégios de administrador. Permite a atualização parcial dos
-    dados do produto. Se um novo SKU for fornecido, verifica se ele não está
-    em uso por outro produto.
+    dados do produto, incluindo seus dados logísticos. Se um novo SKU for
+    fornecido, verifica se ele não está em uso por outro produto.
     """
     db_product = crud.get_product(db, product_id)
     if not db_product:

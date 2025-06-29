@@ -58,7 +58,8 @@ class Category(Base):
 class Product(Base):
     """
     Modelo SQLAlchemy representando a tabela 'products' no banco de dados.
-    Contém todos os detalhes de um produto, incluindo estoque e preço.
+    Contém todos os detalhes de um produto, incluindo estoque, preço e dados
+    logísticos (peso e dimensões) essenciais para o cálculo de frete.
     """
 
     __tablename__ = "products"
@@ -73,6 +74,12 @@ class Product(Base):
         Integer, default=0, server_default="0", nullable=False
     )
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
+
+    # Campos de Logística para Cálculo de Frete
+    weight_kg: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    height_cm: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    width_cm: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
+    length_cm: Mapped[float] = mapped_column(Float, nullable=False, server_default="0")
 
     category: Mapped["Category"] = relationship(back_populates="products")
     reviews: Mapped[List["ProductReview"]] = relationship(
@@ -230,8 +237,8 @@ class ProductReview(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    author: Mapped["User"] = relationship(back_populates="reviews")
     product: Mapped["Product"] = relationship(back_populates="reviews")
+    author: Mapped["User"] = relationship(back_populates="reviews")
 
     __table_args__ = (
         UniqueConstraint("user_id", "product_id", name="uq_user_product_review"),

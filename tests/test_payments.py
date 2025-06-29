@@ -40,6 +40,10 @@ def order_for_payment(
         "price": 123.45,
         "stock": 10,
         "category_id": cat_resp.json()["id"],
+        "weight_kg": 0.8,
+        "height_cm": 10,
+        "width_cm": 15,
+        "length_cm": 25,
     }
     prod_resp = client.post(
         "/products/", headers=superuser_token_headers, json=prod_data

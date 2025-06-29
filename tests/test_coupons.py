@@ -95,6 +95,10 @@ def product_for_coupon(
         "price": 100.0,
         "category_id": cat_resp.json()["id"],
         "stock": 10,
+        "weight_kg": 0.5,
+        "height_cm": 5,
+        "width_cm": 20,
+        "length_cm": 20,
     }
     prod_resp = client.post(
         "/products/", headers=superuser_token_headers, json=prod_data
@@ -163,7 +167,7 @@ def test_order_creation_with_coupon(
     client.post(
         "/cart/items/",
         headers=user_token_headers,
-        json={"product_id": product_for_coupon["id"], "quantity": 2},  
+        json={"product_id": product_for_coupon["id"], "quantity": 2},
     ).raise_for_status()
     client.post(
         "/cart/apply-coupon", headers=user_token_headers, json={"code": "PEDIDO20"}
@@ -172,7 +176,7 @@ def test_order_creation_with_coupon(
     order_resp = client.post("/orders/", headers=user_token_headers)
     assert order_resp.status_code == 201, order_resp.text
     order_json = order_resp.json()
-    assert order_json["total_price"] == 160.0  
+    assert order_json["total_price"] == 160.0
     assert order_json["discount_amount"] == 40.0
     assert order_json["coupon_code_used"] == "PEDIDO20"
 

@@ -44,6 +44,10 @@ def create_product_for_order(
         "price": 25.50,
         "category_id": cat_resp.json()["id"],
         "stock": 10,
+        "weight_kg": 0.3,
+        "height_cm": 4,
+        "width_cm": 12,
+        "length_cm": 18,
     }
     prod_resp = client.post("/products/", headers=headers, json=prod_data)
     prod_resp.raise_for_status()

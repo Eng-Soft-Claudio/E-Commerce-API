@@ -25,9 +25,6 @@ Ele é responsável por:
 
 import os
 
-# DEFINE AS VARIÁVEIS DE AMBIENTE ANTES DE QUALQUER IMPORT DE 'SRC'
-# Isso garante que o módulo `src.settings` possa ser carregado sem erros
-# durante a coleta de testes do pytest.
 os.environ["POSTGRES_USER"] = "test_user"
 os.environ["POSTGRES_PASSWORD"] = "test_password"
 os.environ["POSTGRES_SERVER"] = "test_db_server"
@@ -37,6 +34,8 @@ os.environ["JWT_SECRET_KEY"] = "test_jwt_secret_key_that_is_long_enough"
 os.environ["STRIPE_SECRET_KEY"] = "sk_test_dummy_key_for_testing"
 os.environ["STRIPE_WEBHOOK_SECRET"] = "whsec_test_dummy_webhook_secret_for_testing"
 os.environ["CLIENT_URL"] = "http://testfrontend"
+os.environ["MELHOR_ENVIO_TOKEN"] = "dummy_melhor_envio_token"
+os.environ["STORE_ORIGIN_CEP"] = "01001000"
 
 
 import pytest

@@ -52,6 +52,10 @@ def order_for_admin_tests(
         "price": 99.99,
         "category_id": category_id,
         "stock": 10,
+        "weight_kg": 1.0,
+        "height_cm": 10,
+        "width_cm": 10,
+        "length_cm": 10,
     }
     prod_resp = client.post(
         "/products/", headers=superuser_token_headers, json=prod_data
@@ -193,6 +197,7 @@ def test_superuser_can_update_order_status(
     assert order_after is not None
     assert order_after.status == "shipped"
 
+
 def test_superuser_can_read_any_single_order(
     client: TestClient, superuser_token_headers: Dict, order_for_admin_tests: Dict
 ):
@@ -203,7 +208,7 @@ def test_superuser_can_read_any_single_order(
     order_id = order_for_admin_tests["id"]
 
     response = client.get(f"/orders/{order_id}", headers=superuser_token_headers)
-    
+
     assert response.status_code == 200, response.text
     assert response.json()["id"] == order_id
 

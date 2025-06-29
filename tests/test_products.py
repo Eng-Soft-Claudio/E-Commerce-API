@@ -70,6 +70,10 @@ def test_superuser_product_crud_cycle(
         "category_id": category_id,
         "stock": 10,
         "description": "Um laptop poderoso para profissionais.",
+        "weight_kg": 1.8,
+        "height_cm": 1.5,
+        "width_cm": 35.0,
+        "length_cm": 25.0,
     }
     create_response = client.post(
         "/products/", headers=superuser_token_headers, json=product_data
@@ -86,7 +90,12 @@ def test_superuser_product_crud_cycle(
     assert read_response.status_code == 200
     assert read_response.json()["name"] == product_data["name"]
 
-    update_data = {"name": "Laptop Ultra", "price": 5500.0, "stock": 5}
+    update_data = {
+        "name": "Laptop Ultra",
+        "price": 5500.0,
+        "stock": 5,
+        "weight_kg": 1.7,
+    }
     update_response = client.put(
         f"/products/{product_id}", headers=superuser_token_headers, json=update_data
     )
@@ -95,6 +104,7 @@ def test_superuser_product_crud_cycle(
     assert updated_product["name"] == update_data["name"]
     assert updated_product["price"] == update_data["price"]
     assert updated_product["stock"] == update_data["stock"]
+    assert updated_product["weight_kg"] == 1.7
 
     delete_response = client.delete(
         f"/products/{product_id}", headers=superuser_token_headers
@@ -125,6 +135,8 @@ def test_search_and_filter_products_functionality(
         client, superuser_token_headers, title="Calçados"
     )
 
+    base_logistics = {"weight_kg": 0.3, "height_cm": 5, "width_cm": 20, "length_cm": 30}
+
     client.post(
         "/products/",
         headers=superuser_token_headers,
@@ -134,6 +146,7 @@ def test_search_and_filter_products_functionality(
             "price": 80,
             "category_id": cat_a_id,
             "description": "Tecido macio e confortável.",
+            **base_logistics,
         },
     ).raise_for_status()
     client.post(
@@ -145,6 +158,8 @@ def test_search_and_filter_products_functionality(
             "price": 150,
             "category_id": cat_a_id,
             "description": "Jeans de alta durabilidade.",
+            **base_logistics,
+            "weight_kg": 0.7,
         },
     ).raise_for_status()
     client.post(
@@ -156,6 +171,11 @@ def test_search_and_filter_products_functionality(
             "price": 350,
             "category_id": cat_b_id,
             "description": "Ideal para atletas de jeans.",
+            **base_logistics,
+            "weight_kg": 0.9,
+            "height_cm": 12,
+            "width_cm": 15,
+            "length_cm": 35,
         },
     ).raise_for_status()
 
@@ -201,6 +221,8 @@ def test_read_products_filtered_by_category(
         client, superuser_token_headers, title="Cat B"
     )
 
+    base_logistics = {"weight_kg": 0.1, "height_cm": 1, "width_cm": 10, "length_cm": 15}
+
     client.post(
         "/products/",
         headers=superuser_token_headers,
@@ -209,6 +231,7 @@ def test_read_products_filtered_by_category(
             "sku": "PROD-A",
             "price": 10,
             "category_id": cat_a_id,
+            **base_logistics,
         },
     ).raise_for_status()
 
@@ -220,6 +243,7 @@ def test_read_products_filtered_by_category(
             "sku": "PROD-B",
             "price": 20,
             "category_id": cat_b_id,
+            **base_logistics,
         },
     ).raise_for_status()
 
@@ -247,6 +271,10 @@ def test_create_product_with_duplicate_sku(
         "sku": "LIVRO-SKU-UNICO",
         "price": 29.99,
         "category_id": category_id,
+        "weight_kg": 0.4,
+        "height_cm": 2,
+        "width_cm": 15,
+        "length_cm": 22,
     }
     client.post(
         "/products/", headers=superuser_token_headers, json=product_data
@@ -267,11 +295,18 @@ def test_update_product_with_duplicate_sku(
     category_id = create_category_and_get_id(
         client, superuser_token_headers, "Ferramentas"
     )
+    base_logistics = {
+        "weight_kg": 1.0,
+        "height_cm": 10,
+        "width_cm": 10,
+        "length_cm": 40,
+    }
     prod1_data = {
         "name": "Martelo",
         "sku": "FER-001",
         "price": 50,
         "category_id": category_id,
+        **base_logistics,
     }
     client.post(
         "/products/", headers=superuser_token_headers, json=prod1_data
@@ -281,6 +316,8 @@ def test_update_product_with_duplicate_sku(
         "sku": "FER-002",
         "price": 20,
         "category_id": category_id,
+        **base_logistics,
+        "weight_kg": 0.3,
     }
     response = client.post(
         "/products/", headers=superuser_token_headers, json=prod2_data
@@ -305,11 +342,15 @@ def test_create_product_with_nonexistent_category(
         "price": 10.0,
         "category_id": 9999,
         "stock": 5,
+        "weight_kg": 0.1,
+        "height_cm": 1,
+        "width_cm": 1,
+        "length_cm": 1,
     }
     response = client.post(
         "/products/", headers=superuser_token_headers, json=product_data
     )
-    assert response.status_code == 404
+    assert response.status_code == 404, response.text
     assert "Categoria não encontrada" in response.json()["detail"]
 
 
@@ -327,6 +368,10 @@ def test_update_product_with_nonexistent_category(
         "sku": "MOVER-01",
         "price": 50,
         "category_id": category_id,
+        "weight_kg": 0.5,
+        "height_cm": 5,
+        "width_cm": 5,
+        "length_cm": 5,
     }
     prod_resp = client.post(
         "/products/", headers=superuser_token_headers, json=prod_data

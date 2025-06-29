@@ -120,16 +120,24 @@ class ProductBase(BaseModel):
 
 
 class ProductCreate(ProductBase):
-    """Schema para a criação de um novo produto."""
+    """
+    Schema para a criação de um novo produto, incluindo seus dados
+    logísticos para cálculo de frete.
+    """
 
     category_id: int
     stock: int = Field(0, ge=0)
+    weight_kg: float = Field(..., gt=0, description="Peso do produto em Kg.")
+    height_cm: float = Field(..., gt=0, description="Altura do produto em cm.")
+    width_cm: float = Field(..., gt=0, description="Largura do produto em cm.")
+    length_cm: float = Field(..., gt=0, description="Comprimento do produto em cm.")
 
 
 class ProductUpdate(BaseModel):
     """
     Schema para a atualização de um produto existente.
-    Todos os campos são opcionais para permitir atualizações parciais.
+    Todos os campos são opcionais para permitir atualizações parciais,
+    incluindo os dados de logística.
     """
 
     sku: Optional[str] = None
@@ -139,6 +147,10 @@ class ProductUpdate(BaseModel):
     stock: Optional[int] = None
     category_id: Optional[int] = None
     image_url: Optional[str] = None
+    weight_kg: Optional[float] = Field(None, gt=0)
+    height_cm: Optional[float] = Field(None, gt=0)
+    width_cm: Optional[float] = Field(None, gt=0)
+    length_cm: Optional[float] = Field(None, gt=0)
 
 
 class CategoryCreate(BaseModel):
@@ -160,12 +172,17 @@ class CategoryBase(BaseModel):
 
 class Product(ProductBase):
     """
-    Schema de leitura para um produto, incluindo dados de sua categoria e suas avaliações.
+    Schema de leitura para um produto, incluindo dados de categoria,
+    avaliações e informações de logística.
     """
 
     id: int
     stock: int
     category: CategoryBase
+    weight_kg: float
+    height_cm: float
+    width_cm: float
+    length_cm: float
     reviews: List[ProductReview] = []
     model_config = ConfigDict(from_attributes=True)
 
@@ -391,6 +408,7 @@ class ResetPasswordRequest(BaseModel):
 
 class UpdatePasswordRequest(BaseModel):
     """
+
     Schema para a atualização de senha de um usuário autenticado.
 
     Exige a senha atual para verificação de segurança, juntamente com
