@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .database import engine, Base  # noqa: F401
+from .settings import settings 
 
 # -------------------------------------------------------------------------- #
 #                        IMPORTS DOS MÓDULOS DE ROTAS                        #
@@ -56,7 +57,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost"],
+    allow_origins=[settings.CLIENT_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
