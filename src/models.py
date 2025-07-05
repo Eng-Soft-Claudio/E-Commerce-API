@@ -44,7 +44,7 @@ class Category(Base):
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     title: Mapped[str] = mapped_column(String, index=True)
     description: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
-
+    image_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     products: Mapped[List["Product"]] = relationship(
         back_populates="category", cascade="all, delete-orphan"
     )

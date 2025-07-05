@@ -155,10 +155,15 @@ class ProductUpdate(BaseModel):
 
 class CategoryCreate(BaseModel):
     """Schema para a criação de uma nova categoria."""
-
     title: str
     description: Optional[str] = None
+    image_url: Optional[str] = None
 
+class CategoryUpdate(BaseModel):
+    """Schema para a edição de uma categoria."""
+    title: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
 
 class CategoryBase(BaseModel):
     """Schema base com os campos essenciais de uma categoria."""
@@ -166,7 +171,7 @@ class CategoryBase(BaseModel):
     id: int
     title: str
     description: Optional[str] = None
-
+    image_url: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 

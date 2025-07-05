@@ -49,7 +49,7 @@ def create_category_endpoint(
     dependencies=[Depends(auth.get_current_superuser)],
 )
 def update_category_endpoint(
-    category_id: int, category: schemas.CategoryCreate, db: Session = Depends(get_db)
+    category_id: int, category: schemas.CategoryUpdate, db: Session = Depends(get_db)
 ):
     """[Admin] Atualiza os dados de uma categoria existente."""
     db_category = crud.update_category(

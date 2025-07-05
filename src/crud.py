@@ -49,13 +49,14 @@ def create_category(db: Session, category: schemas.CategoryCreate) -> models.Cat
 
 
 def update_category(
-    db: Session, category_id: int, category_data: schemas.CategoryCreate
+    db: Session, category_id: int, category_data: schemas.CategoryUpdate
 ) -> Optional[models.Category]:
     """Atualiza uma categoria existente no banco de dados."""
     db_category = get_category(db, category_id)
     if db_category:
-        db_category.title = category_data.title
-        db_category.description = category_data.description
+        update_data = category_data.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_category, key, value)
         db.commit()
         db.refresh(db_category)
     return db_category
