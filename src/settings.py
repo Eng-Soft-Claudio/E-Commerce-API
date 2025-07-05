@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str = Field(...)
     STRIPE_WEBHOOK_SECRET: str = Field(...)
     CLIENT_URL: str = "https://clt-ecommerce.vercel.app"
-
+    
     MELHOR_ENVIO_TOKEN: str = Field(...)
     STORE_ORIGIN_CEP: str = Field(..., pattern=r"^\d{8}$")
 
