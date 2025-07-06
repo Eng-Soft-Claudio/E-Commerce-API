@@ -39,9 +39,7 @@ def get_categories(
 
 def create_category(db: Session, category: schemas.CategoryCreate) -> models.Category:
     """Cria uma nova categoria no banco de dados."""
-    db_category = models.Category(
-        title=category.title, description=category.description
-    )
+    db_category = models.Category(**category.model_dump())
     db.add(db_category)
     db.commit()
     db.refresh(db_category)
