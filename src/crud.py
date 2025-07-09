@@ -12,13 +12,79 @@ transações e encapsulando as regras de negócio de acesso a dados.
 # -------------------------------------------------------------------------- #
 
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from . import auth, models, schemas
+
+# -------------------------------------------------------------------------- #
+#                         CRUD FUNCTIONS - BANNERS                           #
+# -------------------------------------------------------------------------- #
+
+
+def get_banner(db: Session, banner_id: int) -> Optional[models.Banner]:
+    """Busca um único banner pelo seu ID."""
+    return db.query(models.Banner).filter(models.Banner.id == banner_id).first()
+
+
+def get_all_banners(
+    db: Session, skip: int = 0, limit: int = 100
+) -> List[models.Banner]:
+    """[Admin] Busca uma lista de todos os banners (ativos e inativos) com paginação."""
+    return (
+        db.query(models.Banner)
+        .order_by(models.Banner.position)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+
+def get_active_banners(db: Session) -> List[models.Banner]:
+    """[Público] Busca todos os banners ativos, ordenados por posição."""
+    return (
+        db.query(models.Banner)
+        .filter(models.Banner.is_active.is_(True))
+        .order_by(models.Banner.position)
+        .all()
+    )
+
+
+def create_banner(db: Session, banner: schemas.BannerCreate) -> models.Banner:
+    """[Admin] Cria um novo banner no banco de dados."""
+    db_banner = models.Banner(**banner.model_dump())
+    db.add(db_banner)
+    db.commit()
+    db.refresh(db_banner)
+    return db_banner
+
+
+def update_banner(
+    db: Session, banner_id: int, banner_data: schemas.BannerUpdate
+) -> Optional[models.Banner]:
+    """[Admin] Atualiza um banner existente no banco de dados."""
+    db_banner = get_banner(db, banner_id)
+    if db_banner:
+        update_data = banner_data.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            if hasattr(db_banner, key):
+                setattr(db_banner, key, value)
+        db.commit()
+        db.refresh(db_banner)
+    return db_banner
+
+
+def delete_banner(db: Session, banner_id: int) -> Optional[models.Banner]:
+    """[Admin] Deleta um banner do banco de dados."""
+    db_banner = get_banner(db, banner_id)
+    if db_banner:
+        db.delete(db_banner)
+        db.commit()
+    return db_banner
+
 
 # -------------------------------------------------------------------------- #
 #                         CRUD FUNCTIONS - CATEGORY                          #

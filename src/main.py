@@ -20,6 +20,7 @@ from .settings import settings
 #                        IMPORTS DOS MÓDULOS DE ROTAS                        #
 # -------------------------------------------------------------------------- #
 from .routers import auth
+from .routers import banners
 from .routers import cart
 from .routers import categories
 from .routers import coupons
@@ -72,6 +73,7 @@ app.add_middleware(
 #                         INCLUSÃO DOS ROTEADORES                            #
 # -------------------------------------------------------------------------- #
 app.include_router(auth.router)
+app.include_router(banners.router)
 app.include_router(categories.router)
 app.include_router(products.router)
 app.include_router(reviews.router)

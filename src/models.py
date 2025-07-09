@@ -29,6 +29,45 @@ from typing import List, Optional
 from .database import Base
 
 # -------------------------------------------------------------------------- #
+#                               MODELO DE BANNER                             #
+# -------------------------------------------------------------------------- #
+
+
+class Banner(Base):
+    """
+    Modelo SQLAlchemy representando a tabela 'banners' no banco de dados.
+    Armazena os banners que são exibidos no carrossel da página inicial.
+    """
+
+    __tablename__ = "banners"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(
+        String, nullable=False, comment="Usado como texto alternativo (alt) da imagem."
+    )
+    image_url: Mapped[str] = mapped_column(
+        String, nullable=False, comment="URL da imagem do banner."
+    )
+    link_url: Mapped[Optional[str]] = mapped_column(
+        String,
+        nullable=True,
+        comment="URL opcional para onde o banner redireciona ao ser clicado.",
+    )
+    position: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        comment="Controla a ordem de exibição dos banners.",
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        comment="Permite ativar ou desativar o banner sem deletá-lo.",
+    )
+
+    
+# -------------------------------------------------------------------------- #
 #                               MODELO DE CATEGORIA                          #
 # -------------------------------------------------------------------------- #
 
