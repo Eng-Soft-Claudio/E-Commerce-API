@@ -36,7 +36,7 @@ Base = declarative_base()
 
 def get_db():
     """
-    Dependência do FastAPI que cria e gerencia uma sessão de DB por requisição.
+    Dependência do FastAPI que cria e gerencia uma sessão de DB por uma requisição.
     """
     db = SessionLocal()
     try:
