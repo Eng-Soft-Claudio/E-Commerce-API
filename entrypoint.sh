@@ -1,29 +1,37 @@
 #!/bin/sh
 
 # ========================================================================== #
-#     SCRIPT DE ENTRYPOINT PARA O CONTÊINER DA API FASTAPI (VERSÃO RENDER)   #
+#  SCRIPT DE ENTRYPOINT ROBUSTO PARA O CONTÊINER DA API FASTAPI (PRODUÇÃO)  #
 # ========================================================================== #
-# Este script executa as tarefas essenciais na inicialização do contêiner:
-# 1. Executa as migrações do banco de dados com o Alembic para garantir que
-#    o schema esteja atualizado com o código mais recente.
-# 2. Inicia o servidor Uvicorn para servir a aplicação FastAPI.
-#
-# NOTA: O bloco de verificação da disponibilidade do banco (com nc) foi
-# removido, pois o Render já gerencia o ciclo de vida e a prontidão do
-# banco de dados antes de executar este script.
+# Este script garante a correta inicialização da aplicação:
+# 1. Executa as migrações do Alembic.
+# 2. VERIFICA se a migração foi bem-sucedida. Se falhar, o script para
+#    imediatamente, fazendo com que o deploy no Render falhe e exiba o
+#    erro nos logs.
+# 3. Se a migração for bem-sucedida, inicia o servidor Uvicorn.
 
 # -------------------------------------------------------------------------- #
-#                        EXECUÇÃO DA MIGRAÇÃO DO BANCO DE DADOS               #
+#                        EXECUÇÃO E VERIFICAÇÃO DA MIGRAÇÃO                   #
 # -------------------------------------------------------------------------- #
 echo "Executando migrações do banco de dados (Alembic)..."
+
+# Executa o comando e verifica o código de saída ($?)
 alembic upgrade head
-echo "Migrações concluídas."
+
+# A variável $? contém o código de saída do último comando executado.
+# 0 significa sucesso, qualquer outro valor significa erro.
+if [ $? -ne 0 ]; then
+  echo "!!! FALHA NA MIGRAÇÃO DO BANCO DE DADOS (ALEMBIC) !!!"
+  echo "O deploy será interrompido. Verifique os erros acima."
+  exit 1
+fi
+
+echo "Migrações do banco de dados concluídas com sucesso."
 
 
 # -------------------------------------------------------------------------- #
 #                        INICIALIZAÇÃO DO SERVIDOR WEB                       #
 # -------------------------------------------------------------------------- #
-# Inicia o servidor Uvicorn, tornando a API acessível.
-# O host 0.0.0.0 é essencial para que a aplicação seja acessível de fora do contêiner.
+# Esta linha só será executada se as migrações tiverem sucesso.
 echo "Iniciando a aplicação FastAPI com Uvicorn na porta 8000..."
 uvicorn src.main:app --host 0.0.0.0 --port 8000
