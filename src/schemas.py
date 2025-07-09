@@ -19,7 +19,6 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    HttpUrl,
     computed_field,
     field_validator,
 )
@@ -34,8 +33,8 @@ class BannerBase(BaseModel):
     """Schema base para um banner."""
 
     title: str = Field(..., max_length=200, description="Texto alternativo do banner (alt).")
-    image_url: HttpUrl = Field(..., description="URL da imagem do banner.")
-    link_url: Optional[HttpUrl] = Field(None, description="URL de destino ao clicar no banner.")
+    image_url: str = Field(..., description="URL da imagem do banner.")
+    link_url: Optional[str] = Field(None, description="URL de destino ao clicar no banner.")
     position: int = Field(0, description="Ordem de exibição (menor para maior).")
     is_active: bool = Field(True, description="Indica se o banner deve ser exibido.")
 
@@ -50,8 +49,8 @@ class BannerUpdate(BaseModel):
     """Schema para a atualização parcial de um banner. Todos os campos são opcionais."""
 
     title: Optional[str] = Field(None, max_length=200)
-    image_url: Optional[HttpUrl] = None
-    link_url: Optional[HttpUrl] = None
+    image_url: Optional[str] = None
+    link_url: Optional[str] = None
     position: Optional[int] = None
     is_active: Optional[bool] = None
 
@@ -61,7 +60,8 @@ class Banner(BannerBase):
 
     id: int
     model_config = ConfigDict(from_attributes=True)
-    
+
+
 # -------------------------------------------------------------------------- #
 #                       SCHEMAS DE CUPOM DE DESCONTO                         #
 # -------------------------------------------------------------------------- #
